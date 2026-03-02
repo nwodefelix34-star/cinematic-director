@@ -1,0 +1,97 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json" />
+    <title>Cinematic Veo Director</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;900&family=Oswald:wght@700&family=Playfair+Display:ital,wght@1,900&family=Roboto+Condensed:wght@700&family=Montserrat:wght@900&family=Pacifico&family=Press+Start+2P&family=Bebas+Neue&family=Merriweather:wght@900&family=Lobster&family=Caveat:wght@700&family=Abril+Fatface&family=Righteous&family=Permanent+Marker&family=Cinzel:wght@900&family=Lora:ital,wght@1,700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Text Entrance Animations */
+        @keyframes textFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes textSlideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes textZoomIn {
+          from { opacity: 0; transform: scale(0.6); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes textBounce {
+          0% { opacity: 0; transform: scale(0.3); }
+          50% { opacity: 1; transform: scale(1.05); }
+          70% { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+        @keyframes textBlurIn {
+          from { opacity: 0; filter: blur(10px); transform: scale(1.1); }
+          to { opacity: 1; filter: blur(0); transform: scale(1); }
+        }
+
+        .animate-text-fade { animation: textFade 0.4s ease-out forwards; }
+        .animate-text-slideUp { animation: textSlideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .animate-text-zoomIn { animation: textZoomIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .animate-text-bounce { animation: textBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards; }
+        .animate-text-blurIn { animation: textBlurIn 0.5s ease-out forwards; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then(() => console.log("SW registered"))
+            .catch((err) => console.log("SW registration failed", err));
+        });
+      }
+    </script>
+
+</body>
+</html>

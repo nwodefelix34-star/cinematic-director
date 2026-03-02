@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Copy of Visual Story Architect",
+  "description": "Create stunning multi-scene image stories and YouTube Shorts. Powered by Gemini Image Generation and AI Narration.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
