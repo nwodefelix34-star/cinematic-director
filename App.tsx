@@ -748,9 +748,8 @@ if (!activePrompt || activePrompt.trim() === "") {
 
   try {
     if (mediaMode === 'stock') {
-  const response = await fetch(
-  `${window.location.origin}/api/stock-search?q=${encodeURIComponent(activePrompt)}`
-);
+  const response = await fetch(`/api/stock?q=${encodeURIComponent(activePrompt)}`);
+      
   const data = await response.json();
 
   if (!response.ok) {
