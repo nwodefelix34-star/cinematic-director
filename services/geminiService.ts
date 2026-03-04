@@ -580,6 +580,8 @@ export const generateKnowIt = async (
 }> => {
   const ai = getAI();
 
+  const enforcedMusicVibe = "Fast upbeat educational soundtrack";
+
   const format = isShort ? "YouTube Short (9:16)" : "Cinematic (16:9)";
 
   const response = await ai.models.generateContent({
@@ -655,6 +657,8 @@ export const generateFutureLifeStory = async (
   musicVibe: string;
 }> => {
   const ai = getAI();
+
+  const enforcedMusicVibe = "Emotional cinematic background score";
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
