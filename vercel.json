@@ -1,7 +1,7 @@
 {
   "functions": {
-    "api/*.ts": {
-      "runtime": "@vercel/node"
+    "api/stock.ts": {
+      "runtime": "nodejs18.x"
     }
   }
 }
