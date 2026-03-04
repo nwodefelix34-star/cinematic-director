@@ -4,10 +4,10 @@ export const searchStockImages = async (query: string) => {
     const data = await res.json();
 
     if (data.images) {
-  return data.images;
-}
+      return data.images;
+    }
 
-return [];
+    return [];
   } catch (error) {
     console.error("Stock image search failed:", error);
     return [];
