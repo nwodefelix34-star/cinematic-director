@@ -636,7 +636,7 @@ Return valid JSON only.
     }
   });
 
-  return const text = response.text || "{}";
+const text = response.text || "{}";
 const cleaned = text.replace(/```json|```/g, "").trim();
 return JSON.parse(cleaned);
 };
