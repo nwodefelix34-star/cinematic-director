@@ -636,7 +636,9 @@ Return valid JSON only.
     }
   });
 
-  return JSON.parse(response.text || "{}");
+  return const text = response.text || "{}";
+const cleaned = text.replace(/```json|```/g, "").trim();
+return JSON.parse(cleaned);
 };
   /**
  * Generates a Future Life Story storyboard (Shorts optimized).
@@ -649,7 +651,7 @@ export const generateFutureLifeStory = async (
   storyArc: string;
   globalContext: string;
   visualStyle: string;
-  scenes: { prompt: string; narration: string; sfx: string }[];
+  scenes: { aiPrompt: string; stockQuery: string; narration: string; sfx: string }[];
   musicVibe: string;
 }> => {
   const ai = getAI();
