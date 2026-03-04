@@ -726,7 +726,7 @@ Return valid JSON only.
 export const enhancePrompt = async (userPrompt: string): Promise<string> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Rewrite this prompt to be hyper-descriptive, cinematic, and detailed, similar to the output of a high-end 3D animation director. Focus on technical motion, volumetric lighting, and material textures. Original: "${userPrompt}"`,
     config: {
       thinkingConfig: { thinkingBudget: 16000 }
@@ -785,7 +785,7 @@ export const generateVideo = async (
   
   // Refine the prompt specifically for video motion
   const imagineResponse = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Create a cinematic motion directive for this scene: "${prompt}". 
     The style is ${visualStyle} and world context is ${globalContext}.
     Describe specifically the camera movement and character motion. Provide 2 sentences max.`,
