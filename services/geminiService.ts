@@ -370,7 +370,7 @@ No markdown.
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -395,7 +395,7 @@ No markdown.
 export const generateCustomStyle = async (topic: string, currentContext: string): Promise<string> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Based on the topic "${topic}" and this context: "${currentContext}", brainstorm a unique and visually stunning art style for a viral YouTube video. Focus on 3D educational animation aesthetics.
     Provide only a one-sentence highly descriptive style prompt that focuses on texture, lighting, and artistic medium (e.g. "Hyper-clean 3D claymation with soft sub-surface scattering and vibrant educational lighting").`,
     config: {
@@ -454,7 +454,7 @@ const enforcedMusicVibe =
   channelMusicVibe[channelId as keyof typeof channelMusicVibe]
   || "Cinematic background score";
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     contents: `
 ${UNIVERSAL_HOOK_RULE}
 
@@ -583,7 +583,7 @@ export const generateKnowIt = async (
   const format = isShort ? "YouTube Short (9:16)" : "Cinematic (16:9)";
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     contents: `
 Create a highly engaging ${numScenes}-scene educational ${format} storyboard titled: "${topic}".
 
@@ -657,7 +657,7 @@ export const generateFutureLifeStory = async (
   const ai = getAI();
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     contents: `
 Create a highly emotional ${numScenes}-scene YouTube Short storyboard for a Future Life Story titled: "${topic}".
 
