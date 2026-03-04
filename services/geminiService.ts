@@ -526,7 +526,7 @@ Use the exact style above.
 
     The response must be in JSON format.`,
     config: {
-      thinkingConfig: { thinkingBudget: 32768 },
+      thinkingConfig: { thinkingBudget: 24000 },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
