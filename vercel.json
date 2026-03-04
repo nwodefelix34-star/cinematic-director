@@ -1,7 +1,1 @@
-{
-  "functions": {
-    "api/stock.ts": {
-      "runtime": "nodejs18.x"
-    }
-  }
-}
+
