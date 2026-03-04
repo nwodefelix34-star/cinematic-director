@@ -769,7 +769,7 @@ if (!activePrompt || activePrompt.trim() === "") {
       project.visualStyle
     );
 
-    updateScene(id, { imageUrl, status: 'ready' }, true);
+    updateScene(id, { imageUrl: data.images[0], status: 'ready' }, true);
     setProjectStatus(ProjectStatus.IDLE);
     
   } catch (err: any) {
