@@ -1,18 +1,34 @@
 export default async function handler(req, res) {
   const query = req.query.q;
 
-  const pexelsKey = process.env.PEXELS_API_KEY;
+  const pixabayKey = process.env.PIXABAY_API_KEY;
+  const unsplashKey = process.env.UNSPLASH_API_KEY;
 
-  const r = await fetch(
-    `https://api.pexels.com/v1/search?query=${query}&per_page=10`,
-    {
-      headers: {
-        Authorization: pexelsKey,
-      },
+  try {
+    const pixabay = await fetch(
+      `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(query)}&image_type=photo&per_page=10`
+    );
+
+    const pixabayData = await pixabay.json();
+
+    if (pixabayData.hits && pixabayData.hits.length > 0) {
+      return res.status(200).json({
+        images: pixabayData.hits.map(img => img.webformatURL)
+      });
     }
-  );
 
-  const data = await r.json();
+    const unsplash = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&client_id=${unsplashKey}&per_page=10`
+    );
 
-  res.status(200).json(data);
+    const unsplashData = await unsplash.json();
+
+    return res.status(200).json({
+      images: unsplashData.results.map(img => img.urls.small)
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Stock image search failed" });
+  }
 }
