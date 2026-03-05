@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const unsplashData = await unsplash.json();
 
     return res.status(200).json({
-      images: unsplashData.results.map(img => img.urls.small)
+      images: unsplashData.results.map(img => img.urls.regular)
     });
 
   } catch (error) {
