@@ -751,7 +751,8 @@ if (!activePrompt || activePrompt.trim() === "") {
   const response = await fetch(`/api/stock?q=${encodeURIComponent(activePrompt)}`);
       
   const data = await response.json();
-
+  alert(JSON.stringify(data));
+      
   if (!response.ok) {
     throw new Error(data.error || "Stock search failed");
   }
