@@ -729,40 +729,44 @@ stockQuery: s.stockQuery,
 
   const handleGenerateImage = async (id: string) => {
   const scene = project.scenes.find(s => s.id === id);
+
   if (!scene) {
-  alert("Scene not found");
-  return;
-}
+    alert("Scene not found");
+    return;
+  }
 
-const activePrompt =
-  mediaMode === 'stock'
-    ? scene.stockQuery
-    : scene.aiPrompt;
+  const activePrompt =
+    mediaMode === 'stock'
+      ? scene.stockQuery
+      : scene.aiPrompt;
 
-if (!activePrompt || activePrompt.trim() === "") {
-  alert("Prompt is empty");
-  return;
-}
+  if (!activePrompt || activePrompt.trim() === "") {
+    alert("Prompt is empty");
+    return;
+  }
 
   setProjectStatus(ProjectStatus.GENERATING_IMAGE);
 
   try {
+
+    // STOCK MODE
     if (mediaMode === 'stock') {
-  const response = await fetch(`/api/stock?q=${encodeURIComponent(activePrompt)}`);
-      
-  const data = await response.json();
-  alert(JSON.stringify(data));
-      
-  if (!response.ok) {
-    throw new Error(data.error || "Stock search failed");
-  }
 
-  updateScene(id, { imageUrl: data.imageUrl, status: 'ready' }, true);
-  setProjectStatus(ProjectStatus.IDLE);
-  return;
-}
+      const response = await fetch(`/api/stock?q=${encodeURIComponent(activePrompt)}`);
+      const data = await response.json();
 
-    // AI mode (original behavior)
+      alert(JSON.stringify(data));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Stock search failed");
+      }
+
+      updateScene(id, { imageUrl: data.images[0], status: 'ready' }, true);
+      setProjectStatus(ProjectStatus.IDLE);
+      return;
+    }
+
+    // AI MODE
     const imageUrl = await generateImage(
       activePrompt,
       project.aspectRatio as any,
@@ -770,9 +774,10 @@ if (!activePrompt || activePrompt.trim() === "") {
       project.visualStyle
     );
 
-    updateScene(id, { imageUrl: data.images[0], status: 'ready' }, true);
+    updateScene(id, { imageUrl: imageUrl, status: 'ready' }, true);
+
     setProjectStatus(ProjectStatus.IDLE);
-    
+
   } catch (err: any) {
     console.error("Image generation failed:", err);
     alert("REAL ERROR: " + (err?.message || "Unknown error"));
