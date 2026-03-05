@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
     if (pixabayData.hits && pixabayData.hits.length > 0) {
       return res.status(200).json({
-        images: pixabayData.hits.map(img => img.webformatURL)
+        images: pixabayData.hits.map(img => img.largeImageURL)
       });
     }
 
