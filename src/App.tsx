@@ -774,12 +774,26 @@ stockQuery: s.stockQuery,
     }
 
     // AI MODE
-    const imageUrl = await buildImage(
-  activePrompt,
-  project.aspectRatio as any,
-  project.globalContext,
-  project.visualStyle
-);
+    let imageUrl = "";
+
+if (imageProvider === "gemini") {
+  imageUrl = await buildImage(
+    activePrompt,
+    project.aspectRatio as any,
+    project.globalContext,
+    project.visualStyle
+  );
+}
+
+if (imageProvider === "flow") {
+  alert("Flow generation coming soon");
+  return;
+}
+
+if (imageProvider === "wix") {
+  alert("Wix generation coming soon");
+  return;
+}
     
     updateScene(id, { imageUrl: imageUrl, status: 'ready' }, true);
 
