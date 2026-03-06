@@ -849,15 +849,46 @@ setProject(prev => ({
 };
 
   const handleGenerateVideo = async (id: string) => {
-    const s = project.scenes.find(sc => sc.id === id);
-    if (!s || !s.imageUrl) return;
-    setProjectStatus(ProjectStatus.GENERATING_VIDEO);
-    try {
-      const url = await generateVideo(s.prompt, s.imageUrl, project.aspectRatio as any, project.visualStyle, project.globalContext, project.resolution);
-      updateScene(id, { videoUrl: url, status: 'ready' }, true);
-      setProjectStatus(ProjectStatus.IDLE);
-    } catch (err) { setProjectStatus(ProjectStatus.ERROR); }
-  };
+  const s = project.scenes.find(sc => sc.id === id);
+  if (!s || s.media.length === 0) return;
+
+  const lastShot = s.media[s.media.length - 1];
+
+  if (!lastShot.imageUrl) return;
+
+  setProjectStatus(ProjectStatus.GENERATING_VIDEO);
+
+  try {
+    const url = await generateVideo(
+      s.aiPrompt,
+      lastShot.imageUrl,
+      project.aspectRatio as any,
+      project.visualStyle,
+      project.globalContext,
+      project.resolution
+    );
+
+    const updatedMedia = s.media.map(shot =>
+      shot.id === lastShot.id
+        ? { ...shot, videoUrl: url }
+        : shot
+    );
+
+    setProject(prev => ({
+      ...prev,
+      scenes: prev.scenes.map(scene =>
+        scene.id === id
+          ? { ...scene, media: updatedMedia, status: 'ready' }
+          : scene
+      )
+    }));
+
+    setProjectStatus(ProjectStatus.IDLE);
+
+  } catch (err) {
+    setProjectStatus(ProjectStatus.ERROR);
+  }
+};
 
   const handleGrokBridgeGeneration = async () => {
     if (!activeScene.imageUrl) return;
