@@ -803,8 +803,24 @@ if (imageProvider === "wix") {
   return;
 }
     
-    updateScene(id, { imageUrl: imageUrl, status: 'ready' }, true);
+    const newShot = {
+  id: 'shot-' + Date.now(),
+  imageUrl: imageUrl,
+  duration: project.sceneDuration
+};
 
+setProject(prev => ({
+  ...prev,
+  scenes: prev.scenes.map(scene =>
+    scene.id === id
+      ? {
+          ...scene,
+          media: [...scene.media, newShot],
+          status: 'ready'
+        }
+      : scene
+  )
+}));
     setProjectStatus(ProjectStatus.IDLE);
 
   } catch (err: any) {
