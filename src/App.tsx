@@ -579,9 +579,7 @@ setSavedIdeas(prev => ({
     setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
     try {
       const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
-      
-  let result;
-      
+   
   const result = await buildStoryboard(
   autoTopic,
   selectedChannelId,
