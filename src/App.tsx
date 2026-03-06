@@ -35,6 +35,7 @@ import {
   buildFutureLifeStoryboard,
   buildKnowItStoryboard
 } from "./engine/storyboardEngine";
+import { buildImage, buildVideo } from "./engine/mediaEngine";
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
@@ -770,13 +771,13 @@ stockQuery: s.stockQuery,
     }
 
     // AI MODE
-    const imageUrl = await generateImage(
-      activePrompt,
-      project.aspectRatio as any,
-      project.globalContext,
-      project.visualStyle
-    );
-
+    const imageUrl = await buildImage(
+  activePrompt,
+  project.aspectRatio as any,
+  project.globalContext,
+  project.visualStyle
+);
+    
     updateScene(id, { imageUrl: imageUrl, status: 'ready' }, true);
 
     setProjectStatus(ProjectStatus.IDLE);
