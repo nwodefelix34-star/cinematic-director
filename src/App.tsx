@@ -528,7 +528,7 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
     .slice(0, 50);
 
   // 🔵 Generate new ideas
-  const ideas = await generateIdeas(
+  const ideas = await generateIdeaList(
   ideaTopic,
   selectedChannelId,
   existingIdeas
