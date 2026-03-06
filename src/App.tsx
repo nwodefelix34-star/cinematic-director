@@ -776,7 +776,24 @@ stockQuery: s.stockQuery,
         throw new Error(data.error || "Stock search failed");
       }
 
-      updateScene(id, { imageUrl: data.images[0], status: 'ready' }, true);
+      const newShot = {
+  id: 'shot-' + Date.now(),
+  imageUrl: data.images[0],
+  duration: project.sceneDuration
+};
+
+setProject(prev => ({
+  ...prev,
+  scenes: prev.scenes.map(scene =>
+    scene.id === id
+      ? {
+          ...scene,
+          media: [...scene.media, newShot],
+          status: 'ready'
+        }
+      : scene
+  )
+}));
       setProjectStatus(ProjectStatus.IDLE);
       return;
     }
