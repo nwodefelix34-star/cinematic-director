@@ -1343,6 +1343,45 @@ if (appMode === 'ideas') {
     </button>
   </div>
 
+                  {mediaMode === 'ai' && (
+  <div className="grid grid-cols-3 gap-2">
+
+    <button
+      onClick={() => setImageProvider('gemini')}
+      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
+        imageProvider === 'gemini'
+          ? 'bg-purple-500 text-black border-purple-500'
+          : 'bg-[#14141c] border-white/5 text-slate-500'
+      }`}
+    >
+      Gemini
+    </button>
+
+    <button
+      onClick={() => setImageProvider('flow')}
+      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
+        imageProvider === 'flow'
+          ? 'bg-blue-500 text-black border-blue-500'
+          : 'bg-[#14141c] border-white/5 text-slate-500'
+      }`}
+    >
+      Flow
+    </button>
+
+    <button
+      onClick={() => setImageProvider('wix')}
+      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
+        imageProvider === 'wix'
+          ? 'bg-pink-500 text-black border-pink-500'
+          : 'bg-[#14141c] border-white/5 text-slate-500'
+      }`}
+    >
+      Wix
+    </button>
+
+  </div>
+)}
+
   <button
     onClick={() => handleGenerateImage(activeSceneId)}
     className="w-full py-4 bg-white text-black rounded-xl text-[9px] font-black uppercase transition-all shadow-lg"
