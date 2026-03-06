@@ -1684,13 +1684,16 @@ if (appMode === 'ideas') {
            activeSceneId={activeSceneId} 
            onSelectScene={setActiveSceneId} 
            onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, {
-                                                                                                id: 'sc-' + Date.now(),
-                                                                                                prompt: '',
-                                                                                                narrationChunk: '',
-                                                                                                status: 'ready',
-                                                                                                duration: project.sceneDuration,
-                                                                                                narrationDuration: project.sceneDuration,
-                                                                                                sfxPrompt: ''
+  id: 'sc-' + Date.now(),
+  aiPrompt: '',
+  stockQuery: '',
+  narrationChunk: '',
+  status: 'ready',
+  duration: project.sceneDuration,
+  narrationDuration: project.sceneDuration,
+  sfxPrompt: '',
+  media: []
+           }
           }
               ]
             }));
