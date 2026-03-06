@@ -29,6 +29,12 @@ import {
   generateCustomStyle,
   generateIdeas
 } from './services/geminiService';
+import { generateIdeaList } from "./engine/ideaEngine";
+import {
+  buildStoryboard,
+  buildFutureLifeStoryboard,
+  buildKnowItStoryboard
+} from "./engine/storyboardEngine";
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
@@ -576,13 +582,12 @@ setSavedIdeas(prev => ({
       
   let result;
       
-  result = await generateStoryboard(
+  const result = await buildStoryboard(
   autoTopic,
   selectedChannelId,
   project.aspectRatio === '9:16',
   numScenes
 );
-
       const channelPacing = {
   mindforged: { first: 0.75, last: 1.25 },
   cosmora: { first: 0.85, last: 1.3 },
@@ -643,7 +648,7 @@ stockQuery: s.stockQuery,
   try {
     const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
 
-    const result = await generateFutureLifeStory(
+    const result = await buildFutureLifeStoryboard(
       autoTopic,
       project.aspectRatio === '9:16',
       numScenes
@@ -692,7 +697,7 @@ stockQuery: s.stockQuery,
       Math.ceil(project.targetTotalDuration / project.sceneDuration)
     );
 
-    const result = await generateKnowIt(
+    const result = await buildKnowItStoryboard(
       autoTopic,
       project.aspectRatio === '9:16',
       numScenes
