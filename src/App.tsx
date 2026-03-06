@@ -1599,8 +1599,19 @@ if (appMode === 'ideas') {
           <div className="flex flex-col items-center w-full h-full">
             <div className={`relative flex-1 bg-black shadow-[0_0_100px_rgba(0,0,0,0.8)] border border-white/5 rounded-2xl overflow-hidden flex flex-col transition-all duration-700 max-h-full max-w-full ${project.aspectRatio === '9:16' ? 'aspect-[9/16] h-full w-auto' : 'aspect-video w-full h-auto max-w-5xl'}`}>
                <div className="flex-1 relative overflow-hidden flex items-center justify-center">
-                  {activeScene.videoUrl ? <video key={activeScene.videoUrl} src={activeScene.videoUrl} className="w-full h-full object-contain" autoPlay loop muted /> : activeScene.imageUrl ? <img src={activeScene.imageUrl} className="w-full h-full object-cover" /> : <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4"><i className="fas fa-cube"></i><span className="text-[10px] font-black uppercase tracking-[1em]">Director Monitor</span></div>}
-                  
+                  const firstShot = activeScene.media?.[0];
+
+{firstShot?.videoUrl ? (
+  <video src={firstShot.videoUrl} className="w-full h-full object-contain" autoPlay loop muted />
+) : firstShot?.imageUrl ? (
+  <img src={firstShot.imageUrl} className="w-full h-full object-cover" />
+) : (
+  <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4">
+    <i className="fas fa-cube"></i>
+    <span className="text-[10px] font-black uppercase tracking-[1em]">Director Monitor</span>
+  </div>
+)}
+                 
                   {project.captionConfig.showCaptions && activeScene.narrationChunk && (
                      <div className="absolute bottom-8 left-0 right-0 px-8 flex justify-center pointer-events-none z-20">
                         <div className={`px-8 py-3 rounded-2xl text-center font-black transition-all border border-white/5 backdrop-blur-md animate-text-${project.captionConfig.animationType}`} style={{ 
