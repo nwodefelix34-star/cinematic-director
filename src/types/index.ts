@@ -34,6 +34,14 @@ export interface AudioClip {
   audioUrl?: string;
 }
 
+export type MediaShot = {
+  id: string
+  prompt?: string
+  imageUrl?: string
+  videoUrl?: string
+  duration: number
+}
+
 export interface Scene {
   id: string;
   aiPrompt: string;
