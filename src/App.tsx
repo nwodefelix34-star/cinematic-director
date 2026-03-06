@@ -1758,8 +1758,7 @@ if (appMode === 'ideas') {
   sfxPrompt: '',
   media: []
            }
-          }
-              ]
+           ]
             }));
           }} 
            onRemoveScene={handleRemoveScene} 
