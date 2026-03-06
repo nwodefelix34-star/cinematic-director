@@ -247,8 +247,8 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   duration: 5,
   narrationDuration: 5,
   media: []
-}]
-    extraTracks: [[], []],
+}],
+extraTracks: [[], []],
     backgroundMusicVibe: 'Playful, Educational, Upbeat',
     narrationScript: '',
     aspectRatio: '9:16',
