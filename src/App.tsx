@@ -168,6 +168,9 @@ console.log("APP MODE:", appMode);
   // 🔥 Channel + Mode System
 const [selectedChannelId, setSelectedChannelId] = useState<string>('mindforged');
   const [mediaMode, setMediaMode] = useState<'stock' | 'ai'>('ai');
+
+  const [imageProvider, setImageProvider] =
+useState<'gemini' | 'flow' | 'wix'>('gemini');
   
   useEffect(() => {
   const channel = CHANNELS.find(c => c.id === selectedChannelId);
