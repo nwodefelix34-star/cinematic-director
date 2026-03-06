@@ -49,8 +49,7 @@ stockQuery: string;
   enhancedPrompt?: string;
   narrationChunk?: string;
   narrationAudioUrl?: string;
-  imageUrl?: string;
-  videoUrl?: string;
+  media: MediaShot[]
   duration?: number;
   narrationDuration?: number;
   status: 'empty' | 'generating' | 'ready' | 'error';
