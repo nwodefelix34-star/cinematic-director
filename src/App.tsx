@@ -239,7 +239,15 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
     id: 'proj-' + Date.now(),
     title: 'Cinematic Visual Studio',
     channel: "default",
-    scenes: [{ id: 'sc-1', prompt: '', status: 'empty', duration: 5, narrationDuration: 5 }],
+    scenes: [{
+  id: 'sc-1',
+  aiPrompt: '',
+  stockQuery: '',
+  status: 'empty',
+  duration: 5,
+  narrationDuration: 5,
+  media: []
+}]
     extraTracks: [[], []],
     backgroundMusicVibe: 'Playful, Educational, Upbeat',
     narrationScript: '',
