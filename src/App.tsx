@@ -1760,17 +1760,31 @@ if (appMode === 'ideas') {
            extraTracks={project.extraTracks} 
            activeSceneId={activeSceneId} 
            onSelectScene={setActiveSceneId} 
-           onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, {
+           onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, 
+  {
   id: 'sc-' + Date.now(),
+
+  mediaType: 'ai',
+
   aiPrompt: '',
+  startFramePrompt: '',
+  targetFramePrompt: '',
+  videoPrompt: '',
+
   stockQuery: '',
+
+  startImageUrl: '',
+  targetImageUrl: '',
+  videoUrl: '',
+
+  mediaShots: [],
+
   narrationChunk: '',
   status: 'ready',
   duration: project.sceneDuration,
   narrationDuration: project.sceneDuration,
-  sfxPrompt: '',
-  media: []
-           }
+  sfxPrompt: ''
+  }
            ]
             }));
           }} 
