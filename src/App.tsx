@@ -241,12 +241,25 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
     channel: "default",
     scenes: [{
   id: 'sc-1',
+
+  mediaType: 'ai',
+
   aiPrompt: '',
+  startFramePrompt: '',
+  targetFramePrompt: '',
+  videoPrompt: '',
+
   stockQuery: '',
+
+  startImageUrl: '',
+  targetImageUrl: '',
+  videoUrl: '',
+
+  mediaShots: [],
+
   status: 'empty',
   duration: 5,
-  narrationDuration: 5,
-  media: []
+  narrationDuration: 5
 }],
 extraTracks: [[], []],
     backgroundMusicVibe: 'Playful, Educational, Upbeat',
