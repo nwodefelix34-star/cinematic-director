@@ -44,17 +44,39 @@ export type MediaShot = {
 
 export interface Scene {
   id: string;
-  aiPrompt: string;
-stockQuery: string;
-  enhancedPrompt?: string;
+
+  // Scene mode
+  mediaType: 'ai' | 'stock';
+
+  // AI scene prompts
+  aiPrompt?: string;
+  startFramePrompt?: string;
+  targetFramePrompt?: string;
+  videoPrompt?: string;
+
+  // Stock scene prompt
+  stockQuery?: string;
+
+  // Generated media
+  startImageUrl?: string;
+  targetImageUrl?: string;
+  videoUrl?: string;
+
+  // Stock montage shots
+  mediaShots?: MediaShot[];
+
+  // narration
   narrationChunk?: string;
   narrationAudioUrl?: string;
-  media: MediaShot[]
+
+  // timing
   duration?: number;
   narrationDuration?: number;
+
   status: 'empty' | 'generating' | 'ready' | 'error';
-  sfxPrompt?: string; 
-  motionSensitivity?: number; // 0-100 for camera movement intensity
+
+  sfxPrompt?: string;
+  motionSensitivity?: number;
 }
 
 export interface CaptionConfig {
