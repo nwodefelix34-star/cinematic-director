@@ -779,38 +779,25 @@ stockQuery: s.stockQuery,
   try {
 
     // STOCK MODE
-    if (mediaMode === 'stock') {
+if (mediaMode === 'stock') {
 
-      const response = await fetch(`/api/stock?q=${encodeURIComponent(activePrompt)}`);
-      const data = await response.json();
+  const shots = analyzeStockPrompt(scene.stockQuery)
 
-      alert(JSON.stringify(data));
+  const mediaShots = shots.map(s => ({
+    id: s.id,
+    prompt: s.prompt,
+    duration: scene.duration || project.sceneDuration
+  }))
 
-      if (!response.ok) {
-        throw new Error(data.error || "Stock search failed");
-      }
+  updateScene(id, {
+    mediaShots,
+    status: 'ready'
+  })
 
-      const newShot = {
-  id: 'shot-' + Date.now(),
-  imageUrl: data.images[0],
-  duration: project.sceneDuration
-};
+  setProjectStatus(ProjectStatus.IDLE)
 
-setProject(prev => ({
-  ...prev,
-  scenes: prev.scenes.map(scene =>
-    scene.id === id
-      ? {
-          ...scene,
-          media: [...scene.media, newShot],
-          status: 'ready'
-        }
-      : scene
-  )
-}));
-      setProjectStatus(ProjectStatus.IDLE);
-      return;
-    }
+  return
+}
 
     // AI MODE
     let imageUrl = "";
