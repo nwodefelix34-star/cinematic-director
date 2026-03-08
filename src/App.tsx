@@ -256,8 +256,7 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   targetImageUrl: '',
   videoUrl: '',
 
-  media: [],
-mediaShots: [],
+  mediaShots: [],
 
   status: 'empty',
   duration: 5,
@@ -1767,7 +1766,6 @@ if (appMode === 'ideas') {
   targetImageUrl: '',
   videoUrl: '',
 
-  media: [],
 mediaShots: [],
 
   narrationChunk: '',
