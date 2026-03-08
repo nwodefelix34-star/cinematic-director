@@ -784,14 +784,25 @@ if (scene.mediaType === 'stock') {
 
   const shots = analyzeStockPrompt(scene.stockQuery)
 
-  const mediaShots = shots.map(s => ({
-    id: s.id,
-    prompt: s.prompt,
-    duration: scene.duration || project.sceneDuration
-  }))
+  const newShots = []
+
+  for (const shot of shots) {
+
+    const images = await fetchStockImages(shot.prompt)
+
+    if (images.length > 0) {
+      newShots.push({
+        id: shot.id,
+        prompt: shot.prompt,
+        imageUrl: images[0].url,
+        duration: scene.duration || project.sceneDuration
+      })
+    }
+
+  }
 
   updateScene(id, {
-    mediaShots,
+    mediaShots: newShots,
     status: 'ready'
   })
 
