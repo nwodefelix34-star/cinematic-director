@@ -1688,7 +1688,7 @@ if (appMode === 'ideas') {
 {firstShot?.videoUrl ? (
   <video src={firstShot.videoUrl} className="w-full h-full object-contain" autoPlay loop muted />
 ) : firstShot?.imageUrl ? (
-  <img src={firstShot.imageUrl} className="w-full h-full object-cover" />
+  <img src={firstShot.imageUrl} className="w-full h-full object-contain" />
 ) : (
   <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4">
     <i className="fas fa-cube"></i>
