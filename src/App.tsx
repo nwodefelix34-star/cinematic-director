@@ -845,7 +845,7 @@ setProject(prev => ({
     scene.id === id
       ? {
           ...scene,
-          media: [...scene.media, newShot],
+          mediaShots: [newShot],
           status: 'ready'
         }
       : scene
