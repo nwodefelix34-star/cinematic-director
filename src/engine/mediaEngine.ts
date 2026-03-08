@@ -1,4 +1,8 @@
-import { generateImage, generateVideo } from "../services/geminiService";
+import { generateImage, generateVideo } from "../services/geminiService"
+
+const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_KEY
+
+// ---------------- AI IMAGE ----------------
 
 export async function buildImage(
   prompt: string,
@@ -11,8 +15,10 @@ export async function buildImage(
     aspectRatio,
     context,
     style
-  );
+  )
 }
+
+// ---------------- AI VIDEO ----------------
 
 export async function buildVideo(
   prompt: string,
@@ -29,5 +35,30 @@ export async function buildVideo(
     style,
     context,
     resolution
-  );
+  )
+}
+
+// ---------------- STOCK IMAGE ----------------
+
+export async function fetchStockImage(query: string) {
+
+  if (!PIXABAY_KEY) {
+    console.error("Pixabay API key missing")
+    return ""
+  }
+
+  const url =
+    `https://pixabay.com/api/?key=${PIXABAY_KEY}` +
+    `&q=${encodeURIComponent(query)}` +
+    `&image_type=photo&orientation=horizontal&per_page=3`
+
+  const res = await fetch(url)
+
+  const data = await res.json()
+
+  if (!data.hits || data.hits.length === 0) {
+    return ""
+  }
+
+  return data.hits[0].webformatURL
 }
