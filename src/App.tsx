@@ -766,9 +766,9 @@ stockQuery: s.stockQuery,
   }
 
   const activePrompt =
-    mediaMode === 'stock'
-      ? scene.stockQuery
-      : scene.aiPrompt;
+  scene.mediaType === 'stock'
+    ? scene.stockQuery
+    : scene.aiPrompt;
 
   if (!activePrompt || activePrompt.trim() === "") {
     alert("Prompt is empty");
@@ -780,7 +780,7 @@ stockQuery: s.stockQuery,
   try {
 
     // STOCK MODE
-if (mediaMode === 'stock') {
+if (scene.mediaType === 'stock') {
 
   const shots = analyzeStockPrompt(scene.stockQuery)
 
