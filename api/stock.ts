@@ -5,30 +5,39 @@ export default async function handler(req, res) {
   const unsplashKey = process.env.UNSPLASH_API_KEY;
 
   try {
-    const pixabay = await fetch(
+
+    const pixabayPromise = fetch(
       `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(query)}&image_type=photo&per_page=10`
     );
 
-    const pixabayData = await pixabay.json();
-
-    if (pixabayData.hits && pixabayData.hits.length > 0) {
-      return res.status(200).json({
-        images: pixabayData.hits.map(img => img.largeImageURL)
-      });
-    }
-
-    const unsplash = await fetch(
+    const unsplashPromise = fetch(
       `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&client_id=${unsplashKey}&per_page=10`
     );
 
-    const unsplashData = await unsplash.json();
+    const [pixabayRes, unsplashRes] = await Promise.all([
+      pixabayPromise,
+      unsplashPromise
+    ]);
 
-    return res.status(200).json({
-      images: unsplashData.results.map(img => img.urls.regular)
-    });
+    const pixabayData = await pixabayRes.json();
+    const unsplashData = await unsplashRes.json();
+
+    const pixabayImages =
+      pixabayData?.hits?.map(img => img.largeImageURL) || [];
+
+    const unsplashImages =
+      unsplashData?.results?.map(img => img.urls.regular) || [];
+
+    const images = [...pixabayImages, ...unsplashImages];
+
+    return res.status(200).json({ images });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Stock image search failed" });
+    console.error("Stock API error:", error);
+
+    return res.status(500).json({
+      error: "Stock image search failed",
+      images: []
+    });
   }
 }
