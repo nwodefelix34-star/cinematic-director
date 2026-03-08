@@ -1,8 +1,12 @@
 import { generateImage, generateVideo } from "../services/geminiService"
 
-const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_KEY
+const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY
+const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY
 
-// ---------------- AI IMAGE ----------------
+
+// ===============================
+// AI IMAGE
+// ===============================
 
 export async function buildImage(
   prompt: string,
@@ -18,7 +22,10 @@ export async function buildImage(
   )
 }
 
-// ---------------- AI VIDEO ----------------
+
+// ===============================
+// AI VIDEO
+// ===============================
 
 export async function buildVideo(
   prompt: string,
@@ -38,27 +45,79 @@ export async function buildVideo(
   )
 }
 
-// ---------------- STOCK IMAGE ----------------
 
-export async function fetchStockImage(query: string) {
+// ===============================
+// PIXABAY SEARCH
+// ===============================
+
+async function searchPixabay(query: string) {
 
   if (!PIXABAY_KEY) {
-    console.error("Pixabay API key missing")
-    return ""
+    console.warn("Pixabay key missing")
+    return []
   }
 
   const url =
     `https://pixabay.com/api/?key=${PIXABAY_KEY}` +
     `&q=${encodeURIComponent(query)}` +
-    `&image_type=photo&orientation=horizontal&per_page=3`
+    `&image_type=photo` +
+    `&per_page=5`
 
   const res = await fetch(url)
+  const data = await res.json()
+
+  if (!data.hits) return []
+
+  return data.hits.map((img: any) => ({
+    url: img.webformatURL,
+    source: "pixabay"
+  }))
+}
+
+
+// ===============================
+// UNSPLASH SEARCH
+// ===============================
+
+async function searchUnsplash(query: string) {
+
+  if (!UNSPLASH_KEY) {
+    console.warn("Unsplash key missing")
+    return []
+  }
+
+  const url =
+    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=5`
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Client-ID ${UNSPLASH_KEY}`
+    }
+  })
 
   const data = await res.json()
 
-  if (!data.hits || data.hits.length === 0) {
-    return ""
-  }
+  if (!data.results) return []
 
-  return data.hits[0].webformatURL
+  return data.results.map((img: any) => ({
+    url: img.urls.regular,
+    source: "unsplash"
+  }))
+}
+
+
+// ===============================
+// STOCK ENGINE
+// ===============================
+
+export async function fetchStockImages(query: string) {
+
+  const [pixabay, unsplash] = await Promise.all([
+    searchPixabay(query),
+    searchUnsplash(query)
+  ])
+
+  const combined = [...pixabay, ...unsplash]
+
+  return combined
 }
