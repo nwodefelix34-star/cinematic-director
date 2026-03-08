@@ -35,7 +35,7 @@ import {
   buildFutureLifeStoryboard,
   buildKnowItStoryboard
 } from "./engine/storyboardEngine";
-import { buildImage, buildVideo } from "./engine/mediaEngine";
+import { buildImage, buildVideo, fetchStockImages } from "./engine/mediaEngine";
 import { analyzeStockPrompt } from "./engine/promptAnalyzer";
 
 const AVAILABLE_FONTS = [
