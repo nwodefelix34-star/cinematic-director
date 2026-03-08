@@ -780,7 +780,7 @@ stockQuery: s.stockQuery,
   try {
 
     // STOCK MODE
-if (scene.mediaType === 'stock') {
+if (mediaMode === 'stock') {
 
   const shots = analyzeStockPrompt(scene.stockQuery)
 
