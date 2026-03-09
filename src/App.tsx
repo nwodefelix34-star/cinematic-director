@@ -1711,11 +1711,6 @@ if (appMode === 'ideas') {
     </span>
   </div>
 )}
-  <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4">
-    <i className="fas fa-cube"></i>
-    <span className="text-[10px] font-black uppercase tracking-[1em]">Director Monitor</span>
-  </div>
-)}
                  
                   {project.captionConfig.showCaptions && activeScene.narrationChunk && (
                      <div className="absolute bottom-8 left-0 right-0 px-8 flex justify-center pointer-events-none z-20">
