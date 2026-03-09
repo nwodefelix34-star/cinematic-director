@@ -334,7 +334,7 @@ extraTracks: [[], []],
   const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
 
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
-  const firstShot = activeScene.mediaShots?.[0];
+  const firstFrame = activeScene.frames?.[0];
   const visualDuration = project.scenes.reduce((acc, s) => acc + (s.duration || project.sceneDuration), 0);
   const audioDuration = project.scenes.reduce((acc, s) => acc + (s.narrationDuration || s.duration || project.sceneDuration), 0);
   const maxExtraTrackLength = project.extraTracks.reduce((max, track) => {
