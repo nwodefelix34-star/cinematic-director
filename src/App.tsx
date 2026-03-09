@@ -790,34 +790,34 @@ stockQuery: s.stockQuery,
 // STOCK MODE
 if (mediaMode === 'stock') {
 
-const shots = analyzeStockPrompt(scene.stockQuery || "")
+  const shots = analyzeStockPrompt(scene.stockQuery || "")
+  const newFrames = []
 
-const newFrames = []
+  for (const shot of shots) {
 
-for (const shot of shots) {
+    const images = await fetchStockImages(shot.prompt)
 
-  const images = await fetchStockImages(shot.prompt)
+    console.log("STOCK RESULTS:", images)
 
-  console.log("STOCK RESULTS:", images)
-
-  if (images && images.length > 0 && images[0].url) {
-  newFrames.push({
-    id: 'frame-' + Date.now() + Math.random(),
-    prompt: shot.prompt,
-    imageUrl: images[0].url,
-    duration: scene.duration || project.sceneDuration,
-    type: "stock"
-  })
+    if (images && images.length > 0 && images[0].url) {
+      newFrames.push({
+        id: 'frame-' + Date.now() + Math.random(),
+        prompt: shot.prompt,
+        imageUrl: images[0].url,
+        duration: scene.duration || project.sceneDuration,
+        type: "stock"
+      })
+    }
   }
 
-updateScene(id, {
-  frames: newFrames,
-  status: 'ready'
-})
+  updateScene(id, {
+    frames: newFrames,
+    status: 'ready'
+  })
 
-setProjectStatus(ProjectStatus.IDLE)
+  setProjectStatus(ProjectStatus.IDLE)
 
-return
+  return
 }
 
     // AI MODE
