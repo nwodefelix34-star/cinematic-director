@@ -798,16 +798,17 @@ for (const shot of shots) {
 
   const images = await fetchStockImages(shot.prompt)
 
-  if (images.length > 0) {
-    newFrames.push({
-      id: shot.id,
-      prompt: shot.prompt,
-      imageUrl: images[0].url,
-      duration: scene.duration || project.sceneDuration,
-      type: "stock"
-    })
+  console.log("STOCK RESULTS:", images)
+
+  if (images && images.length > 0 && images[0].url) {
+  newFrames.push({
+    id: 'frame-' + Date.now() + Math.random(),
+    prompt: shot.prompt,
+    imageUrl: images[0].url,
+    duration: scene.duration || project.sceneDuration,
+    type: "stock"
+  })
   }
-}
 
 updateScene(id, {
   frames: newFrames,
