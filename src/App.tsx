@@ -256,7 +256,7 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   targetImageUrl: '',
   videoUrl: '',
 
-  mediaShots: [],
+  frames: [],
 
   status: 'empty',
   duration: 5,
@@ -781,30 +781,27 @@ stockQuery: s.stockQuery,
 
     // STOCK MODE
 if (mediaMode === 'stock') {
+const newFrames = []
 
-  const shots = analyzeStockPrompt(scene.stockQuery)
+for (const shot of shots) {
 
-  const newShots = []
+  const images = await fetchStockImages(shot.prompt)
 
-  for (const shot of shots) {
-
-    const images = await fetchStockImages(shot.prompt)
-
-    if (images.length > 0) {
-      newShots.push({
-        id: shot.id,
-        prompt: shot.prompt,
-        imageUrl: images[0].url,
-        duration: scene.duration || project.sceneDuration
-      })
-    }
-
+  if (images.length > 0) {
+    newFrames.push({
+      id: shot.id,
+      prompt: shot.prompt,
+      imageUrl: images[0].url,
+      duration: scene.duration || project.sceneDuration,
+      type: "stock"
+    })
   }
+}
 
-  updateScene(id, {
-    mediaShots: newShots,
-    status: 'ready'
-  })
+updateScene(id, {
+  frames: newFrames,
+  status: 'ready'
+})
 
   setProjectStatus(ProjectStatus.IDLE)
 
@@ -1776,7 +1773,7 @@ if (appMode === 'ideas') {
   targetImageUrl: '',
   videoUrl: '',
 
-mediaShots: [],
+  frames: [],
 
   narrationChunk: '',
   status: 'ready',
