@@ -34,12 +34,13 @@ export interface AudioClip {
   audioUrl?: string;
 }
 
-export type MediaShot = {
+export type Frame = {
   id: string
   prompt?: string
   imageUrl?: string
   videoUrl?: string
   duration: number
+  type: 'ai' | 'stock'
 }
 
 export interface Scene {
@@ -63,7 +64,7 @@ export interface Scene {
   videoUrl?: string;
 
   // Stock montage shots
-  mediaShots?: MediaShot[];
+  frames?: Frame[];
 
   // narration
   narrationChunk?: string;
@@ -107,6 +108,7 @@ export interface VoiceSettings {
 export interface Project {
   id: string;
   title: string;
+  characters?: CharacterProfile[]
   scenes: Scene[];
   extraTracks: AudioClip[][];
   backgroundMusicVibe: string;
