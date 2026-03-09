@@ -648,12 +648,16 @@ stockQuery: s.stockQuery,
 };
 });
       setProject(prev => ({ 
-        ...prev, 
-        title: result.title, 
-        globalContext: result.globalContext,
-        visualStyle: result.visualStyle,
-        scenes: newScenes 
-      }));
+  ...prev,
+  title: result.title,
+  globalContext: result.globalContext,
+  visualStyle: result.visualStyle,
+
+  characters: entities.characters,
+  environments: entities.environments,
+
+  scenes: newScenes
+}));
       setActiveSceneId(newScenes[0].id);
       setProjectStatus(ProjectStatus.IDLE);
     } catch (err: any) { 
