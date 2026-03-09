@@ -37,6 +37,7 @@ import {
 } from "./engine/storyboardEngine";
 import { buildImage, buildVideo, fetchStockImages } from "./engine/mediaEngine";
 import { analyzeStockPrompt } from "./engine/promptAnalyzer";
+import { analyzeEntities } from "./engine/entityAnalyzer";
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
