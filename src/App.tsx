@@ -787,29 +787,33 @@ stockQuery: s.stockQuery,
 
   try {
 
-    // STOCK MODE
+// STOCK MODE
 if (mediaMode === 'stock') {
-const newFrames = []
 
-for (const shot of shots) {
+  const shots = analyzeStockPrompt(scene.stockQuery || "")
 
-  const images = await fetchStockImages(shot.prompt)
+  const newFrames = []
 
-  if (images.length > 0) {
-    newFrames.push({
-      id: shot.id,
-      prompt: shot.prompt,
-      imageUrl: images[0].url,
-      duration: scene.duration || project.sceneDuration,
-      type: "stock"
-    })
+  for (const shot of shots) {
+
+    const images = await fetchStockImages(shot.prompt)
+
+    if (images.length > 0) {
+      newFrames.push({
+        id: shot.id,
+        prompt: shot.prompt,
+        imageUrl: images[0].url,
+        duration: scene.duration || project.sceneDuration,
+        type: "stock"
+      })
+    }
+
   }
-}
 
-updateScene(id, {
-  frames: newFrames,
-  status: 'ready'
-})
+  updateScene(id, {
+    frames: newFrames,
+    status: 'ready'
+  })
 
   setProjectStatus(ProjectStatus.IDLE)
 
