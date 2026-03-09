@@ -609,6 +609,7 @@ setSavedIdeas(prev => ({
       const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
    
   const result = await buildStoryboard(
+  const entities = analyzeEntities(autoTopic)
   autoTopic,
   selectedChannelId,
   project.aspectRatio === '9:16',
