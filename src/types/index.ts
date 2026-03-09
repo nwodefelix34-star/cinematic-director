@@ -66,6 +66,9 @@ export interface Scene {
   // Stock montage shots
   frames?: Frame[];
 
+  characterIds?: string[]
+  environmentId?: string
+
   // narration
   narrationChunk?: string;
   narrationAudioUrl?: string;
@@ -105,10 +108,50 @@ export interface VoiceSettings {
   energy: 'low' | 'normal' | 'high';
 }
 
+// ===============================
+// CHARACTER PROFILE
+// ===============================
+
+export interface CharacterProfile {
+  id: string
+  name: string
+  description: string
+
+  appearance: {
+    gender?: string
+    age?: string
+    ethnicity?: string
+    face?: string
+    hair?: string
+    eyes?: string
+    facialHair?: string
+  }
+
+  clothing?: string
+  accessories?: string
+}
+
+
+// ===============================
+// ENVIRONMENT PROFILE
+// ===============================
+
+export interface EnvironmentProfile {
+  id: string
+  name: string
+  description: string
+
+  lighting?: string
+  weather?: string
+  timeOfDay?: string
+  atmosphere?: string
+}
+
 export interface Project {
   id: string;
   title: string;
   characters?: CharacterProfile[]
+  environments?: EnvironmentProfile[]
   scenes: Scene[];
   extraTracks: AudioClip[][];
   backgroundMusicVibe: string;
