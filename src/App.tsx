@@ -609,12 +609,14 @@ setSavedIdeas(prev => ({
       const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
    
   const result = await buildStoryboard(
-  const entities = analyzeEntities(autoTopic)
   autoTopic,
   selectedChannelId,
   project.aspectRatio === '9:16',
   numScenes
 );
+
+const entities = analyzeEntities(autoTopic);
+      
       const channelPacing = {
   mindforged: { first: 0.75, last: 1.25 },
   cosmora: { first: 0.85, last: 1.3 },
