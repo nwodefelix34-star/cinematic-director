@@ -349,16 +349,37 @@ const currentFrame =
   const totalLength = Math.max(visualDuration, audioDuration, maxExtraTrackLength, 0.1);
 
   useEffect(() => {
+
   if (!activeScene?.frames || activeScene.frames.length === 0) return;
 
-  const frameDuration = (activeScene.duration || project.sceneDuration) / activeScene.frames.length;
+  // calculate scene start time
+  let accumulated = 0;
+  let sceneStart = 0;
 
-  const index = Math.floor(currentTime / frameDuration);
+  for (const s of project.scenes) {
+
+    const dur = s.duration || project.sceneDuration;
+
+    if (s.id === activeScene.id) {
+      sceneStart = accumulated;
+      break;
+    }
+
+    accumulated += dur;
+  }
+
+  const sceneTime = currentTime - sceneStart;
+
+  const frameDuration =
+    (activeScene.duration || project.sceneDuration) /
+    activeScene.frames.length;
+
+  const index = Math.floor(sceneTime / frameDuration);
 
   setFrameIndex(Math.min(index, activeScene.frames.length - 1));
 
-}, [currentTime, activeScene]);
-
+}, [currentTime, activeScene, project.scenes]);
+  
   const initAudioContext = () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
