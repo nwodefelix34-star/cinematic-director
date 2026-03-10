@@ -851,6 +851,8 @@ if (mediaMode === 'stock') {
     }
   }
 
+  alert(JSON.stringify(newFrames, null, 2))
+  
   updateScene(id, {
     frames: newFrames,
     status: 'ready'
