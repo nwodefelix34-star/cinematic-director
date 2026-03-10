@@ -1713,17 +1713,17 @@ if (appMode === 'ideas') {
             <div className={`relative flex-1 bg-black shadow-[0_0_100px_rgba(0,0,0,0.8)] border border-white/5 rounded-2xl overflow-hidden flex flex-col transition-all duration-700 max-h-full max-w-full ${project.aspectRatio === '9:16' ? 'aspect-[9/16] h-full w-auto' : 'aspect-video w-full h-auto max-w-5xl'}`}>
                <div className="flex-1 relative overflow-hidden flex items-center justify-center">
 
-{firstFrame?.videoUrl ? (
+{currentFrame?.videoUrl ? (
   <video
-    src={firstFrame.videoUrl}
+    src={currentFrame.videoUrl}
     className="w-full h-full object-contain"
     autoPlay
     loop
     muted
   />
-) : firstFrame?.imageUrl ? (
+) : currentFrame?.imageUrl ? (
   <img
-    src={firstFrame.imageUrl}
+    src={currentFrame.imageUrl}
     className="w-full h-full object-contain"
   />
 ) : (
