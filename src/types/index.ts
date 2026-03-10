@@ -39,6 +39,7 @@ export type Frame = {
   prompt?: string
   imageUrl?: string
   videoUrl?: string
+  options?: string[]   // 10 selectable stock images
   duration: number
   type: 'ai' | 'stock'
 }
