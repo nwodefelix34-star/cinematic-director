@@ -335,7 +335,8 @@ extraTracks: [[], []],
   const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
 
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
-  const firstFrame = activeScene.frames?.[0];
+  const currentFrame = activeScene.frames?.[frameIndex] || activeScene.frames?.[0];
+  const [frameIndex, setFrameIndex] = useState(0);
   const visualDuration = project.scenes.reduce((acc, s) => acc + (s.duration || project.sceneDuration), 0);
   const audioDuration = project.scenes.reduce((acc, s) => acc + (s.narrationDuration || s.duration || project.sceneDuration), 0);
   const maxExtraTrackLength = project.extraTracks.reduce((max, track) => {
@@ -343,6 +344,17 @@ extraTracks: [[], []],
     return Math.max(max, trackEnd);
   }, 0);
   const totalLength = Math.max(visualDuration, audioDuration, maxExtraTrackLength, 0.1);
+
+  useEffect(() => {
+  if (!activeScene?.frames || activeScene.frames.length === 0) return;
+
+  const frameDuration = (activeScene.duration || project.sceneDuration) / activeScene.frames.length;
+
+  const index = Math.floor(currentTime / frameDuration);
+
+  setFrameIndex(Math.min(index, activeScene.frames.length - 1));
+
+}, [currentTime, activeScene]);
 
   const initAudioContext = () => {
     if (!audioContextRef.current) {
