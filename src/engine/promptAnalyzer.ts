@@ -25,19 +25,18 @@ export function analyzeStockPrompt(query: string): ShotResult[] {
     .filter(p => p.length > 3)
 
   // If still only one part, force cinematic breakdown
-  if (parts.length <= 1) {
+  if (parts.length < 2) {
 
-    const words = query.split(" ")
+  const words = query.split(" ")
 
-    const segmentSize = Math.ceil(words.length / 3)
+  const segmentSize = Math.ceil(words.length / 2)
 
-    parts = [
-      words.slice(0, segmentSize).join(" "),
-      words.slice(segmentSize, segmentSize * 2).join(" "),
-      words.slice(segmentSize * 2).join(" ")
-    ].filter(p => p.length > 3)
+  parts = [
+    words.slice(0, segmentSize).join(" "),
+    words.slice(segmentSize).join(" ")
+  ].filter(p => p.length > 3)
 
-  }
+}
 
   const elements = parts.slice(0, MAX_SHOTS)
 
