@@ -848,9 +848,11 @@ if (imageProvider === "wix") {
 }
     
     const newShot = {
-  id: 'shot-' + Date.now(),
+  idconst newFrame = {
+  id: 'frame-' + Date.now(),
   imageUrl: imageUrl,
-  duration: project.sceneDuration
+  duration: project.sceneDuration,
+  type: "ai"
 };
 
 setProject(prev => ({
@@ -859,7 +861,7 @@ setProject(prev => ({
     scene.id === id
       ? {
           ...scene,
-          mediaShots: [newShot],
+          frames: [newFrame],
           status: 'ready'
         }
       : scene
