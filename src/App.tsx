@@ -847,9 +847,9 @@ if (imageProvider === "wix") {
   return;
 }
     
-    const newShot = {
-  idconst newFrame = {
+    const newFrame = {
   id: 'frame-' + Date.now(),
+  prompt: activePrompt,
   imageUrl: imageUrl,
   duration: project.sceneDuration,
   type: "ai"
