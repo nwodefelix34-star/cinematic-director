@@ -207,13 +207,28 @@ const Timeline: React.FC<TimelineProps> = ({
                           <i className="fas fa-times text-[8px]"></i>
                         </button>
 
-                        {scene.imageUrl ? (
-                          <img src={scene.imageUrl} className="w-full h-full object-cover opacity-50 pointer-events-none" />
-                        ) : (
-                          <div className="opacity-10 scale-75">
-                            <i className="fas fa-image text-lg"></i>
-                          </div>
-                        )}
+                        {scene.frames && scene.frames.length > 0 ? (
+  <img
+    src={scene.frames[0].imageUrl}
+    className="w-full h-full object-cover opacity-50 pointer-events-none"
+  />
+) : (
+  <div className="opacity-10 scale-75">
+    <i className="fas fa-image text-lg"></i>
+  </div>
+)}
+
+                      {scene.frames && scene.frames.length > 1 && (
+  <div className="absolute inset-0 flex pointer-events-none">
+    {scene.frames.map((frame, i) => (
+      <div
+        key={frame.id}
+        className="border-r border-white/20"
+        style={{ width: `${100 / scene.frames.length}%` }}
+      />
+    ))}
+  </div>
+)}
                         
                         <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
                           {dur.toFixed(1)}s
