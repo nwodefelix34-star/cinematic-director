@@ -208,10 +208,22 @@ const Timeline: React.FC<TimelineProps> = ({
                         </button>
 
                         {scene.frames && scene.frames.length > 0 ? (
-  <img
-    src={scene.frames[0].imageUrl}
-    className="w-full h-full object-cover opacity-50 pointer-events-none"
-  />
+  <div className="absolute inset-0 flex">
+    {scene.frames.map((frame, i) => (
+      <div
+        key={frame.id}
+        className="h-full"
+        style={{ width: `${100 / scene.frames.length}%` }}
+      >
+        {frame.imageUrl && (
+          <img
+            src={frame.imageUrl}
+            className="w-full h-full object-cover opacity-60 pointer-events-none"
+          />
+        )}
+      </div>
+    ))}
+  </div>
 ) : (
   <div className="opacity-10 scale-75">
     <i className="fas fa-image text-lg"></i>
