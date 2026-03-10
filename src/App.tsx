@@ -1760,6 +1760,32 @@ if (appMode === 'ideas') {
     </span>
   </div>
 )}
+
+
+                {currentFrame?.options && currentFrame.options.length > 0 && (
+  <div className="absolute bottom-2 left-2 right-2 flex gap-2 overflow-x-auto bg-black/40 p-2 rounded-lg">
+    {currentFrame.options.map((img, idx) => (
+      <img
+        key={idx}
+        src={img}
+        onClick={() => {
+          updateScene(activeSceneId, {
+            frames: activeScene.frames?.map(f =>
+              f.id === currentFrame.id
+                ? { ...f, imageUrl: img }
+                : f
+            )
+          })
+        }}
+        className={`w-16 h-16 object-cover rounded cursor-pointer border ${
+          currentFrame.imageUrl === img
+            ? "border-cyan-400"
+            : "border-white/10"
+        }`}
+      />
+    ))}
+  </div>
+)}
                  
                   {project.captionConfig.showCaptions && activeScene.narrationChunk && (
                      <div className="absolute bottom-8 left-0 right-0 px-8 flex justify-center pointer-events-none z-20">
