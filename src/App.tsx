@@ -799,14 +799,19 @@ if (mediaMode === 'stock') {
 
     console.log("STOCK RESULTS:", images)
 
-    if (images && images.length > 0 && images[0].url) {
-      newFrames.push({
-        id: 'frame-' + Date.now() + Math.random(),
-        prompt: shot.prompt,
-        imageUrl: images[0].url,
-        duration: scene.duration || project.sceneDuration,
-        type: "stock"
-      })
+    if (images && images.length > 0) {
+
+  const imageOptions = images.map(img => img.url)
+
+  newFrames.push({
+    id: 'frame-' + Date.now() + Math.random(),
+    prompt: shot.prompt,
+    imageUrl: imageOptions[0],   // default selected image
+    options: imageOptions,       // store all 10 results
+    duration: scene.duration || project.sceneDuration,
+    type: "stock"
+  })
+
     }
   }
 
