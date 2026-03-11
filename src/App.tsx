@@ -336,6 +336,9 @@ extraTracks: [[], []],
 
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
 
+  const clipDuration = activeScene.duration || project.sceneDuration
+const markerPercent = (clipDuration / (clipDuration + 2)) * 100
+
   const [frameIndex, setFrameIndex] = useState(0);
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
 
