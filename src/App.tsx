@@ -1436,6 +1436,39 @@ if (appMode === 'ideas') {
       )}
 
       <main className="flex-1 flex overflow-hidden relative">
+        {isFrameEditorOpen && (
+
+  <div className="absolute inset-0 bg-[#050507] z-[120] flex flex-col">
+
+    {/* HEADER */}
+    <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
+
+      {/* BACK BUTTON */}
+      <button
+        onClick={() => setIsFrameEditorOpen(false)}
+        className="text-sm text-white"
+      >
+        ← Back
+      </button>
+
+      {/* TITLE */}
+      <div className="text-xs uppercase tracking-widest text-slate-400">
+        Frame Editor
+      </div>
+
+      {/* SNAP TOGGLE */}
+      <button
+        onClick={() => setSnapEnabled(prev => !prev)}
+        className="text-xs text-cyan-400"
+      >
+        Snap
+      </button>
+
+    </div>
+
+  </div>
+
+)}
         <aside className="w-14 border-r border-white/5 bg-[#0a0a0f] flex flex-col shrink-0 z-40">
           <div className="flex-1 flex flex-col items-center py-6 gap-6 overflow-y-auto no-scrollbar">
             {(['story', 'style', 'visuals', 'text', 'voice', 'score', 'foley'] as AppTab[]).map((tab) => (
