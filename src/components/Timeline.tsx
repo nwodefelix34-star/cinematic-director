@@ -193,7 +193,27 @@ const Timeline: React.FC<TimelineProps> = ({
                           ${isActive ? 'border-[#3ab7bf] bg-[#3ab7bf]/10' : 'border-[#1a1a24] bg-[#111116] hover:border-slate-700'}
                         `}
                         style={{ width: `${dur * PIXELS_PER_SECOND}px`, minWidth: '40px' }}
-                        onClick={() => onSelectScene(scene.id)}
+                        onClick={(e) => {
+
+  const rect = e.currentTarget.getBoundingClientRect()
+  const clickX = e.clientX - rect.left
+
+  const frameCount = scene.frames?.length || 1
+  const frameWidth = rect.width / frameCount
+
+  const clickedFrame = Math.floor(clickX / frameWidth)
+
+  onSelectScene(scene.id)
+
+  if (scene.frames && scene.frames.length > 0) {
+    window.dispatchEvent(
+      new CustomEvent("selectFrame", {
+        detail: clickedFrame
+      })
+    )
+  }
+
+}}
                       >
                         <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'visual', 'resize-left', dur)} className="absolute left-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/30 cursor-ew-resize transition-all z-20 opacity-0 group-hover:opacity-100"></div>
 
