@@ -1548,7 +1548,8 @@ if (appMode === 'ideas') {
           />
 
         )}
-
+        
+        <div className="absolute top-0 right-0 w-[6px] h-full bg-white/30 cursor-ew-resize"></div>
       </div>
 
     )
