@@ -6,6 +6,7 @@ interface TimelineProps {
   extraTracks: AudioClip[][];
   activeSceneId: string;
   onSelectScene: (id: string) => void;
+  onOpenFrameEditor: () => void;
   onAddScene: () => void;
   onRemoveScene: (id: string) => void;
   onUpdateSceneDuration: (id: string, duration: number) => void;
@@ -212,7 +213,9 @@ const Timeline: React.FC<TimelineProps> = ({
       })
     )
   }
-
+                          
+onOpenFrameEditor()
+                          
 }}
                       >
                         <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'visual', 'resize-left', dur)} className="absolute left-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/30 cursor-ew-resize transition-all z-20 opacity-0 group-hover:opacity-100"></div>
