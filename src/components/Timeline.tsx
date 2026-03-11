@@ -39,6 +39,7 @@ const Timeline: React.FC<TimelineProps> = ({
   extraTracks,
   activeSceneId, 
   onSelectScene, 
+  onOpenFrameEditor,
   onAddScene,
   onRemoveScene,
   onUpdateSceneDuration,
