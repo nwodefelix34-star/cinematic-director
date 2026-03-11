@@ -1501,8 +1501,15 @@ if (appMode === 'ideas') {
 
 {/* FRAME TIMELINE */}
 
-<div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded">
+<div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded overflow-hidden">
 
+  {/* CLIP END MARKER */}
+
+<div
+  className="absolute top-0 bottom-0 w-[2px] bg-red-500"
+  style={{ left: "100%" }}
+/>
+  
   {activeScene.frames?.map((frame, index) => {
 
     const frameWidth =
