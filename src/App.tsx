@@ -340,8 +340,10 @@ const timelineMax = clipDuration * 1.5
 const clipPercent = (clipDuration / timelineMax) * 100
   
   const [frameIndex, setFrameIndex] = useState(0);
-  const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
 
+const [timelineMode, setTimelineMode] =
+useState<'scene' | 'frame'>('scene');
+  
   useEffect(() => {
 
   const handleFrameSelect = (e: any) => {
