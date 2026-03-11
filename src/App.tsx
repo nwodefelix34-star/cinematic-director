@@ -1475,10 +1475,77 @@ if (appMode === 'ideas') {
 
 <div className="w-full bg-[#111116] border border-white/10 rounded-lg p-4 flex flex-col gap-4">
 
-  {/* FRAME STRIP PLACEHOLDER */}
-  <div className="w-full h-16 bg-[#0c0c12] border border-white/5 rounded flex items-center justify-center text-xs text-slate-500">
-    Frame timeline (coming next)
-  </div>
+  {/* TIME RULER */}
+
+<div className="relative w-full h-6 text-[10px] text-slate-500">
+
+  {Array.from({
+    length: Math.ceil(activeScene.duration || project.sceneDuration) + 1
+  }).map((_, i) => (
+
+    <div
+      key={i}
+      className="absolute top-0"
+      style={{
+        left: `${(i / (activeScene.duration || project.sceneDuration)) * 100}%`
+      }}
+    >
+      {i}s
+    </div>
+
+  ))}
+
+</div>
+
+
+
+{/* FRAME TIMELINE */}
+
+<div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded">
+
+  {activeScene.frames?.map((frame, index) => {
+
+    const frameWidth =
+      100 / (activeScene.frames?.length || 1)
+
+    const left =
+      frameWidth * index
+
+    return (
+
+      <div
+        key={frame.id}
+
+        onClick={() => setFrameIndex(index)}
+
+        className={`absolute top-0 h-full border cursor-pointer overflow-hidden ${
+          frameIndex === index
+            ? "border-cyan-400"
+            : "border-white/10"
+        }`}
+
+        style={{
+          left: `${left}%`,
+          width: `${frameWidth}%`
+        }}
+      >
+
+        {frame.imageUrl && (
+
+          <img
+            src={frame.imageUrl}
+            className="w-full h-full object-cover"
+          />
+
+        )}
+
+      </div>
+
+    )
+
+  })}
+
+</div>
 
   {/* IMAGE OPTIONS FOR SELECTED FRAME */}
 
