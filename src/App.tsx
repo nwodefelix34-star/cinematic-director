@@ -1472,9 +1472,48 @@ if (appMode === 'ideas') {
       </div>
 
       {/* FRAME TIMELINE AREA */}
-      <div className="w-full h-24 bg-[#111116] border border-white/10 rounded-lg flex items-center justify-center text-slate-600 text-xs">
-        Frame timeline workspace
-      </div>
+
+<div className="w-full bg-[#111116] border border-white/10 rounded-lg p-4 flex flex-col gap-4">
+
+  {/* FRAME STRIP PLACEHOLDER */}
+  <div className="w-full h-16 bg-[#0c0c12] border border-white/5 rounded flex items-center justify-center text-xs text-slate-500">
+    Frame timeline (coming next)
+  </div>
+
+  {/* IMAGE OPTIONS FOR SELECTED FRAME */}
+
+  {currentFrame?.options && currentFrame.options.length > 0 && (
+    <div className="flex gap-2 overflow-x-auto">
+
+      {currentFrame.options.map((img, idx) => (
+
+        <img
+          key={idx}
+          src={img}
+          onClick={() => {
+
+            updateScene(activeSceneId, {
+              frames: activeScene.frames?.map(f =>
+                f.id === currentFrame.id
+                  ? { ...f, imageUrl: img }
+                  : f
+              )
+            })
+
+          }}
+          className={`w-20 h-20 object-cover rounded cursor-pointer border ${
+            currentFrame.imageUrl === img
+              ? "border-cyan-400"
+              : "border-white/10"
+          }`}
+        />
+
+      ))}
+
+    </div>
+  )}
+
+</div>
 
     </div>
 
