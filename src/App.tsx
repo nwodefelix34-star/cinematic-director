@@ -336,7 +336,8 @@ extraTracks: [[], []],
 
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
 
-const [frameIndex, setFrameIndex] = useState(0);
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
 
   useEffect(() => {
 
