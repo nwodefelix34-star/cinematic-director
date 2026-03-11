@@ -1528,7 +1528,7 @@ if (appMode === 'ideas') {
 
         onClick={() => setFrameIndex(index)}
 
-        className={`absolute top-0 h-full border cursor-pointer overflow-hidden ${
+        className={`absolute top-0 h-full border cursor-pointer overflow-hidden relative ${
           frameIndex === index
             ? "border-cyan-400"
             : "border-white/10"
