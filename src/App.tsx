@@ -1441,7 +1441,7 @@ if (appMode === 'ideas') {
       )}
 
       <main className="flex-1 flex overflow-hidden relative">
-        {isFrameEditorOpen && (
+        {timelineMode === 'frame' && (
 
   <div className="absolute inset-0 bg-[#050507] z-[120] flex flex-col">
 
@@ -1449,7 +1449,7 @@ if (appMode === 'ideas') {
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
 
       <button
-        onClick={() => setIsFrameEditorOpen(false)}
+        onClick={() => setTimelineMode('scene')}
         className="text-sm text-white"
       >
         ← Back
