@@ -1503,11 +1503,6 @@ if (appMode === 'ideas') {
 
 <div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded overflow-hidden">
 
-const clipDuration = activeScene.duration || project.sceneDuration
-
-const markerPercent =
-  (clipDuration / (clipDuration + 2)) * 100
-
   <div
   className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-40"
   style={{ left: `${markerPercent}%` }}
