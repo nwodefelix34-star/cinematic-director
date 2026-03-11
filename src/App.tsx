@@ -335,10 +335,10 @@ extraTracks: [[], []],
   const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
 
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
-
-  const clipDuration = activeScene.duration || project.sceneDuration
-const markerPercent = (clipDuration / (clipDuration + 2)) * 100
-
+const clipDuration = activeScene.duration || project.sceneDuration
+const timelineMax = clipDuration * 1.5
+const clipPercent = (clipDuration / timelineMax) * 100
+  
   const [frameIndex, setFrameIndex] = useState(0);
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
 
@@ -1507,9 +1507,13 @@ if (appMode === 'ideas') {
 <div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded overflow-hidden">
 
   <div
-  className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-40"
-  style={{ left: `${markerPercent}%` }}
+  className="absolute top-0 bottom-0 bg-red-500/20 border-l border-red-500 z-20"
+  style={{
+    left: `${clipPercent}%`,
+    right: 0
+  }}
 />
+  
   {activeScene.frames?.map((frame, index) => {
     const frameWidth =
       100 / (activeScene.frames?.length || 1)
