@@ -1443,7 +1443,6 @@ if (appMode === 'ideas') {
     {/* HEADER */}
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
 
-      {/* BACK BUTTON */}
       <button
         onClick={() => setIsFrameEditorOpen(false)}
         className="text-sm text-white"
@@ -1451,12 +1450,10 @@ if (appMode === 'ideas') {
         ← Back
       </button>
 
-      {/* TITLE */}
       <div className="text-xs uppercase tracking-widest text-slate-400">
         Frame Editor
       </div>
 
-      {/* SNAP TOGGLE */}
       <button
         onClick={() => setSnapEnabled(prev => !prev)}
         className="text-xs text-cyan-400"
@@ -1466,9 +1463,25 @@ if (appMode === 'ideas') {
 
     </div>
 
+    {/* FRAME EDITOR WORKSPACE */}
+    <div className="flex-1 flex flex-col p-6 gap-6">
+
+      {/* TIME RULER */}
+      <div className="w-full h-8 flex items-center text-xs text-slate-500">
+        Frame timeline (coming next)
+      </div>
+
+      {/* FRAME TIMELINE AREA */}
+      <div className="w-full h-24 bg-[#111116] border border-white/10 rounded-lg flex items-center justify-center text-slate-600 text-xs">
+        Frame timeline workspace
+      </div>
+
+    </div>
+
   </div>
 
 )}
+
         <aside className="w-14 border-r border-white/5 bg-[#0a0a0f] flex flex-col shrink-0 z-40">
           <div className="flex-1 flex flex-col items-center py-6 gap-6 overflow-y-auto no-scrollbar">
             {(['story', 'style', 'visuals', 'text', 'voice', 'score', 'foley'] as AppTab[]).map((tab) => (
