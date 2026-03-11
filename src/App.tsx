@@ -1866,6 +1866,7 @@ if (appMode === 'ideas') {
            extraTracks={project.extraTracks} 
            activeSceneId={activeSceneId} 
            onSelectScene={setActiveSceneId} 
+           onOpenFrameEditor={() => setIsFrameEditorOpen(true)}
            onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, 
   {
   id: 'sc-' + Date.now(),
