@@ -338,6 +338,20 @@ extraTracks: [[], []],
 
 const [frameIndex, setFrameIndex] = useState(0);
 
+  useEffect(() => {
+
+  const handleFrameSelect = (e: any) => {
+    setFrameIndex(e.detail)
+  }
+
+  window.addEventListener("selectFrame", handleFrameSelect)
+
+  return () => {
+    window.removeEventListener("selectFrame", handleFrameSelect)
+  }
+
+}, [])
+
 const currentFrame =
   activeScene.frames?.[frameIndex] || activeScene.frames?.[0];
   const visualDuration = project.scenes.reduce((acc, s) => acc + (s.duration || project.sceneDuration), 0);
@@ -376,8 +390,10 @@ const currentFrame =
 
   const index = Math.floor(sceneTime / frameDuration);
 
+  if (isPlayingSequence) {
   setFrameIndex(Math.min(index, activeScene.frames.length - 1));
-
+  }
+    
 }, [currentTime, activeScene, project.scenes]);
   
   const initAudioContext = () => {
