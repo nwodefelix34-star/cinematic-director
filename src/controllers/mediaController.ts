@@ -63,58 +63,66 @@ return { frames, clips }
 
 if (imageProvider === "gemini") {
 
-  const startPrompt =
-    scene.startFramePrompt || activePrompt + ", beginning of action"
+  const shots = planCinematicShots(activePrompt)
 
-  const targetPrompt =
-    scene.targetFramePrompt || activePrompt + ", end of action"
+  const clips = []
+  let clipIndex = 0
 
-  const startImage = await buildImage(
-    startPrompt,
-    project.aspectRatio as any,
-    project.globalContext,
-    project.visualStyle
-  )
+  for (const shot of shots) {
 
-  const targetImage = await buildImage(
-    targetPrompt,
-    project.aspectRatio as any,
-    project.globalContext,
-    project.visualStyle
-  )
+    const startPrompt = `${shot.prompt}, beginning of action`
+    const targetPrompt = `${shot.prompt}, end of action`
 
-  const frames = [
+    const startImage = await buildImage(
+      startPrompt,
+      project.aspectRatio as any,
+      project.globalContext,
+      project.visualStyle
+    )
 
-  {
-    id: "frame-" + Date.now(),
-    index: 0,
-    prompt: startPrompt,
-    imageUrl: startImage,
-    duration: project.sceneDuration / 2,
-    type: "ai"
-  },
+    const targetImage = await buildImage(
+      targetPrompt,
+      project.aspectRatio as any,
+      project.globalContext,
+      project.visualStyle
+    )
 
-  {
-    id: "frame-" + Date.now() + "-2",
-    index: 1,
-    prompt: targetPrompt,
-    imageUrl: targetImage,
-    duration: project.sceneDuration / 2,
-    type: "ai"
+    const frames = [
+
+      {
+        id: "frame-" + Date.now() + "-a",
+        index: 0,
+        prompt: startPrompt,
+        imageUrl: startImage,
+        duration: project.sceneDuration / shots.length / 2,
+        type: "ai"
+      },
+
+      {
+        id: "frame-" + Date.now() + "-b",
+        index: 1,
+        prompt: targetPrompt,
+        imageUrl: targetImage,
+        duration: project.sceneDuration / shots.length / 2,
+        type: "ai"
+      }
+
+    ]
+
+    clips.push({
+      id: "clip-" + Date.now() + "-" + clipIndex,
+      index: clipIndex,
+      frames: frames,
+      duration: project.sceneDuration / shots.length
+    })
+
+    clipIndex++
   }
 
-]
+  const frames = clips.flatMap(c => c.frames)
 
-const clips = frames.map((frame, i) => ({
-  id: "clip-" + Date.now() + "-" + i,
-  index: i,
-  frames: [frame],
-  duration: frame.duration
-}))
-
-return { frames, clips }
-
-          }
+  return { frames, clips }
+    }
 
   throw new Error("Image provider not implemented")
 }
