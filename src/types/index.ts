@@ -152,6 +152,7 @@ export interface EnvironmentProfile {
 export interface Project {
   id: string;
   title: string;
+  channel: string;
   characters?: CharacterProfile[]
   environments?: EnvironmentProfile[]
   scenes: Scene[];
