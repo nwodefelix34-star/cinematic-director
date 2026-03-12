@@ -75,3 +75,35 @@ export async function generateSceneImage(
 
   throw new Error("Image provider not implemented")
 }
+
+export async function generateSceneVideo(
+  scene: Scene,
+  project: Project,
+  generateVideo: any
+) {
+
+if (!scene.frames || scene.frames.length === 0) return null
+
+const lastFrame = scene.frames[scene.frames.length - 1]
+
+if (!lastFrame.imageUrl) return null
+
+const url = await generateVideo(
+scene.aiPrompt || "",
+lastFrame.imageUrl,
+project.aspectRatio,
+project.visualStyle,
+project.globalContext,
+project.resolution
+)
+
+const updatedFrames = scene.frames.map(frame =>
+frame.id === lastFrame.id
+? { ...frame, videoUrl: url }
+: frame
+)
+
+return {
+frames: updatedFrames
+}
+}
