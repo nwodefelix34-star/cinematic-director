@@ -825,118 +825,40 @@ stockQuery: s.stockQuery,
 };
 
   const handleGenerateImage = async (id: string) => {
-  const scene = project.scenes.find(s => s.id === id);
 
-  if (!scene) {
-    alert("Scene not found");
-    return;
-  }
+  const scene = project.scenes.find(s => s.id === id)
+  if (!scene) return
 
-  const activePrompt =
-  scene.mediaType === 'stock'
-    ? scene.stockQuery
-    : scene.aiPrompt;
-
-  if (!activePrompt || activePrompt.trim() === "") {
-    alert("Prompt is empty");
-    return;
-  }
-
-  setProjectStatus(ProjectStatus.GENERATING_IMAGE);
+  setProjectStatus(ProjectStatus.GENERATING_IMAGE)
 
   try {
 
-// STOCK MODE
-if (mediaMode === 'stock') {
+    const result = await generateSceneImage(
+      scene,
+      project,
+      mediaMode,
+      imageProvider
+    )
 
-  const shots = analyzeStockPrompt(scene.stockQuery || "")
-  const newFrames = []
+    if (!result) return
 
-  for (const shot of shots) {
+    updateScene(id, {
+      frames: result.frames,
+      status: "ready"
+    })
 
-    const images = await fetchStockImages(shot.prompt)
-
-    console.log("STOCK RESULTS:", images)
-
-    if (images && images.length > 0) {
-
-  const imageOptions = images.map(img => img.url)
-
-  newFrames.push({
-    id: 'frame-' + Date.now() + Math.random(),
-    prompt: shot.prompt,
-    imageUrl: imageOptions[0],   // default selected image
-    options: imageOptions,       // store all 10 results
-    duration: scene.duration || project.sceneDuration,
-    type: "stock"
-  })
-
-    }
-  }
-
-  alert(JSON.stringify(newFrames, null, 2))
-  
-  updateScene(id, {
-    frames: newFrames,
-    status: 'ready'
-  })
-
-  setProjectStatus(ProjectStatus.IDLE)
-
-  return
-}
-
-    // AI MODE
-    let imageUrl = "";
-
-if (imageProvider === "gemini") {
-  imageUrl = await buildImage(
-    activePrompt,
-    project.aspectRatio as any,
-    project.globalContext,
-    project.visualStyle
-  );
-}
-
-if (imageProvider === "flow") {
-  alert("Flow generation coming soon");
-  return;
-}
-
-if (imageProvider === "wix") {
-  alert("Wix generation coming soon");
-  return;
-}
-    
-    const newFrame = {
-  id: 'frame-' + Date.now(),
-  prompt: activePrompt,
-  imageUrl: imageUrl,
-  duration: project.sceneDuration,
-  type: "ai"
-};
-
-setProject(prev => ({
-  ...prev,
-  scenes: prev.scenes.map(scene =>
-    scene.id === id
-      ? {
-          ...scene,
-          frames: [newFrame],
-          status: 'ready'
-        }
-      : scene
-  )
-}));
-    setProjectStatus(ProjectStatus.IDLE);
+    setProjectStatus(ProjectStatus.IDLE)
 
   } catch (err: any) {
-    console.error("Image generation failed:", err);
-    alert("REAL ERROR: " + (err?.message || "Unknown error"));
-    setProjectStatus(ProjectStatus.ERROR);
-    setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
+
+    console.error("Image generation failed:", err)
+
+    alert(err?.message || "Image generation error")
+
+    setProjectStatus(ProjectStatus.ERROR)
+
   }
-};
+  }
 
   const handleGenerateVideo = async (id: string) => {
   const scene = project.scenes.find(sc => sc.id === id)
