@@ -845,9 +845,10 @@ stockQuery: s.stockQuery,
     if (!result) return
 
     updateScene(id, {
-      frames: result.frames,
-      status: "ready"
-    })
+  frames: result.frames,
+  clips: result.clips,
+  status: "ready"
+})
 
     setProjectStatus(ProjectStatus.IDLE)
 
@@ -880,9 +881,10 @@ stockQuery: s.stockQuery,
     if (!result) return
 
     updateScene(id, {
-      frames: result.frames,
-      status: "ready"
-    })
+  frames: result.frames,
+  clips: result.clips,
+  status: "ready"
+})
 
     setProjectStatus(ProjectStatus.IDLE)
 
