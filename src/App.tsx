@@ -37,6 +37,7 @@ import {
 } from "./engine/storyboardEngine";
 import { buildImage, buildVideo, fetchStockImages } from "./engine/mediaEngine";
 import { generateSceneImage } from "./controllers/mediaController"
+import { generateSceneVideo } from "./controllers/mediaController";
 import { analyzeStockPrompt } from "./engine/promptAnalyzer";
 import { analyzeEntities } from "./engine/entityAnalyzer";
 
@@ -861,41 +862,26 @@ stockQuery: s.stockQuery,
   }
 
   const handleGenerateVideo = async (id: string) => {
+
   const scene = project.scenes.find(sc => sc.id === id)
-
-  if (!scene || !scene.frames || scene.frames.length === 0) return
-
-  const lastFrame = scene.frames[scene.frames.length - 1]
-
-  if (!lastFrame.imageUrl) return
+  if (!scene) return
 
   setProjectStatus(ProjectStatus.GENERATING_VIDEO)
 
   try {
 
-    const url = await generateVideo(
-      scene.aiPrompt || "",
-      lastFrame.imageUrl,
-      project.aspectRatio as any,
-      project.visualStyle,
-      project.globalContext,
-      project.resolution
+    const result = await generateSceneVideo(
+      scene,
+      project,
+      generateVideo
     )
 
-    const updatedFrames = scene.frames.map(frame =>
-      frame.id === lastFrame.id
-        ? { ...frame, videoUrl: url }
-        : frame
-    )
+    if (!result) return
 
-    setProject(prev => ({
-      ...prev,
-      scenes: prev.scenes.map(s =>
-        s.id === id
-          ? { ...s, frames: updatedFrames, status: 'ready' }
-          : s
-      )
-    }))
+    updateScene(id, {
+      frames: result.frames,
+      status: "ready"
+    })
 
     setProjectStatus(ProjectStatus.IDLE)
 
@@ -906,7 +892,7 @@ stockQuery: s.stockQuery,
     setProjectStatus(ProjectStatus.ERROR)
 
   }
-    }
+}
 
   const handleGrokBridgeGeneration = async () => {
     if (!activeScene.imageUrl) return;
