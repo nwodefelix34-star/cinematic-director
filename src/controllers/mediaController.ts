@@ -1,6 +1,7 @@
 import { Project, Scene, ProjectStatus } from "../types"
 import { buildImage, fetchStockImages } from "../engine/mediaEngine"
 import { analyzeStockPrompt } from "../engine/promptAnalyzer"
+import { planCinematicShots } from "../engine/shotPlanner"
 
 export async function generateSceneImage(
   scene: Scene,
