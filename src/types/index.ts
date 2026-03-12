@@ -45,6 +45,13 @@ export type Frame = {
   type: 'ai' | 'stock'
 }
 
+export interface Clip {
+  id: string
+  index: number
+  frames: Frame[]
+  duration?: number
+}
+
 export interface Scene {
   id: string;
   order: number
@@ -67,6 +74,7 @@ export interface Scene {
 
   // Stock montage shots
   frames: Frame[];
+  clips?: Clip[]
 
   characterIds?: string[]
   environmentId?: string
