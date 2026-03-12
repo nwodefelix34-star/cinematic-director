@@ -36,6 +36,7 @@ export interface AudioClip {
 
 export type Frame = {
   id: string
+  index: number
   prompt?: string
   imageUrl?: string
   videoUrl?: string
@@ -46,7 +47,7 @@ export type Frame = {
 
 export interface Scene {
   id: string;
-
+  order: number
   // Scene mode
   mediaType: 'ai' | 'stock';
 
@@ -65,7 +66,7 @@ export interface Scene {
   videoUrl?: string;
 
   // Stock montage shots
-  frames?: Frame[];
+  frames: Frame[];
 
   characterIds?: string[]
   environmentId?: string
