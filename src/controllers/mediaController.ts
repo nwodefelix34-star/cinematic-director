@@ -47,7 +47,14 @@ export async function generateSceneImage(
       }
     }
 
-    return { frames }
+    const clips = frames.map((frame, i) => ({
+  id: "clip-" + Date.now() + "-" + i,
+  index: i,
+  frames: [frame],
+  duration: frame.duration
+}))
+
+return { frames, clips }
 
   }
 
@@ -75,29 +82,36 @@ if (imageProvider === "gemini") {
     project.visualStyle
   )
 
-  return {
-    frames: [
+  const frames = [
 
-      {
-        id: "frame-" + Date.now(),
-        index: 0,
-        prompt: startPrompt,
-        imageUrl: startImage,
-        duration: project.sceneDuration / 2,
-        type: "ai"
-      },
+  {
+    id: "frame-" + Date.now(),
+    index: 0,
+    prompt: startPrompt,
+    imageUrl: startImage,
+    duration: project.sceneDuration / 2,
+    type: "ai"
+  },
 
-      {
-        id: "frame-" + Date.now() + "-2",
-        index: 1,
-        prompt: targetPrompt,
-        imageUrl: targetImage,
-        duration: project.sceneDuration / 2,
-        type: "ai"
-      }
-
-    ]
+  {
+    id: "frame-" + Date.now() + "-2",
+    index: 1,
+    prompt: targetPrompt,
+    imageUrl: targetImage,
+    duration: project.sceneDuration / 2,
+    type: "ai"
   }
+
+]
+
+const clips = frames.map((frame, i) => ({
+  id: "clip-" + Date.now() + "-" + i,
+  index: i,
+  frames: [frame],
+  duration: frame.duration
+}))
+
+return { frames, clips }
 
           }
 
