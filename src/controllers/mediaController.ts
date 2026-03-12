@@ -35,13 +35,14 @@ export async function generateSceneImage(
         const options = images.map(img => img.url)
 
         frames.push({
-          id: "frame-" + Date.now() + Math.random(),
-          prompt: shot.prompt,
-          imageUrl: options[0],
-          options: options,
-          duration: scene.duration || project.sceneDuration,
-          type: "stock"
-        })
+  id: "frame-" + Date.now() + Math.random(),
+  index: frames.length,
+  prompt: shot.prompt,
+  imageUrl: options[0],
+  options: options,
+  duration: scene.duration || project.sceneDuration,
+  type: "stock"
+})
 
       }
     }
@@ -52,26 +53,53 @@ export async function generateSceneImage(
 
   // AI MODE
 
-  if (imageProvider === "gemini") {
+if (imageProvider === "gemini") {
 
-    const imageUrl = await buildImage(
-      activePrompt,
-      project.aspectRatio as any,
-      project.globalContext,
-      project.visualStyle
-    )
+  const startPrompt =
+    scene.startFramePrompt || activePrompt + ", beginning of action"
 
-    return {
-      frames: [{
+  const targetPrompt =
+    scene.targetFramePrompt || activePrompt + ", end of action"
+
+  const startImage = await buildImage(
+    startPrompt,
+    project.aspectRatio as any,
+    project.globalContext,
+    project.visualStyle
+  )
+
+  const targetImage = await buildImage(
+    targetPrompt,
+    project.aspectRatio as any,
+    project.globalContext,
+    project.visualStyle
+  )
+
+  return {
+    frames: [
+
+      {
         id: "frame-" + Date.now(),
-        prompt: activePrompt,
-        imageUrl: imageUrl,
-        duration: project.sceneDuration,
+        index: 0,
+        prompt: startPrompt,
+        imageUrl: startImage,
+        duration: project.sceneDuration / 2,
         type: "ai"
-      }]
-    }
+      },
 
+      {
+        id: "frame-" + Date.now() + "-2",
+        index: 1,
+        prompt: targetPrompt,
+        imageUrl: targetImage,
+        duration: project.sceneDuration / 2,
+        type: "ai"
+      }
+
+    ]
   }
+
+          }
 
   throw new Error("Image provider not implemented")
 }
@@ -88,15 +116,21 @@ const lastFrame = scene.frames[scene.frames.length - 1]
 
 if (!lastFrame.imageUrl) return null
 
-const url = await generateVideo(
-scene.aiPrompt || "",
-lastFrame.imageUrl,
-project.aspectRatio,
-project.visualStyle,
-project.globalContext,
-project.resolution
-)
+const startFrame = scene.frames[0]
+const targetFrame = scene.frames[scene.frames.length - 1]
 
+const motionPrompt =
+  scene.videoPrompt ||
+  `${startFrame.prompt} transitioning into ${targetFrame.prompt}, cinematic motion`
+
+const url = await generateVideo(
+  motionPrompt,
+  startFrame.imageUrl,
+  project.aspectRatio,
+  project.visualStyle,
+  project.globalContext,
+  project.resolution
+)
 const updatedFrames = scene.frames.map(frame =>
 frame.id === lastFrame.id
 ? { ...frame, videoUrl: url }
