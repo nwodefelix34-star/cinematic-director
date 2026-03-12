@@ -36,6 +36,7 @@ import {
   buildKnowItStoryboard
 } from "./engine/storyboardEngine";
 import { buildImage, buildVideo, fetchStockImages } from "./engine/mediaEngine";
+import { generateSceneImage } from "./controllers/mediaController"
 import { analyzeStockPrompt } from "./engine/promptAnalyzer";
 import { analyzeEntities } from "./engine/entityAnalyzer";
 
