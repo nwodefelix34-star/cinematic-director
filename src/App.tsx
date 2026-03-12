@@ -700,6 +700,7 @@ if (idx === 0) {
         
         return {
         id: `sc-auto-${idx}-${Date.now()}`,
+          order: idx,
         aiPrompt: s.aiPrompt,
 stockQuery: s.stockQuery,
         narrationChunk: s.narration,
@@ -1926,7 +1927,7 @@ if (appMode === 'ideas') {
            onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, 
   {
   id: 'sc-' + Date.now(),
-
+  order: p.scenes.length
   mediaType: 'ai',
 
   aiPrompt: '',
