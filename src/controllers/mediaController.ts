@@ -72,51 +72,42 @@ const shots = planCinematicShots(detailedPrompt)
 
   for (const shot of shots) {
 
-    const startPrompt = `${shot.prompt}, beginning of action`
-    const targetPrompt = `${shot.prompt}, end of action`
+    const frames = []
+let frameIndex = 0
 
-    let startImage = scene.referenceFrameUrl
+for (const framePrompt of shot.frames) {
 
-if (!startImage) {
+  let imageUrl = null
 
-  startImage = await buildImage(
-    startPrompt,
-    project.aspectRatio as any,
-    project.globalContext,
-    project.visualStyle
-  )
+  if (frameIndex === 0 && scene.referenceFrameUrl) {
+    imageUrl = scene.referenceFrameUrl
+  } else {
 
-          }
-
-    const targetImage = await buildImage(
-      targetPrompt,
+    imageUrl = await buildImage(
+      framePrompt,
       project.aspectRatio as any,
       project.globalContext,
       project.visualStyle
     )
 
-    const frames = [
+  }
 
-      {
-        id: "frame-" + Date.now() + "-a",
-        index: 0,
-        prompt: startPrompt,
-        imageUrl: startImage,
-        duration: project.sceneDuration / shots.length / 2,
-        type: "ai"
-      },
+  if (!scene.referenceFrameUrl && frameIndex === 0) {
+    scene.referenceFrameUrl = imageUrl
+  }
 
-      {
-        id: "frame-" + Date.now() + "-b",
-        index: 1,
-        prompt: targetPrompt,
-        imageUrl: targetImage,
-        duration: project.sceneDuration / shots.length / 2,
-        type: "ai"
-      }
+  frames.push({
+    id: "frame-" + Date.now() + "-" + frameIndex,
+    index: frameIndex,
+    prompt: framePrompt,
+    imageUrl: imageUrl,
+    duration: project.sceneDuration / shots.length / shot.frames.length,
+    type: "ai"
+  })
 
-    ]
+  frameIndex++
 
+}
     if (!scene.referenceFrameUrl) {
   scene.referenceFrameUrl = startImage
     }
