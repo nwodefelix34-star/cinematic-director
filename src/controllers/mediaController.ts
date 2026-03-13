@@ -75,7 +75,19 @@ const shots = planCinematicShots(detailedPrompt)
     const startPrompt = `${shot.prompt}, beginning of action`
     const targetPrompt = `${shot.prompt}, end of action`
 
-    const startImage = await buildImage(
+    let startImage = scene.referenceFrameUrl
+
+if (!startImage) {
+
+  startImage = await buildImage(
+    startPrompt,
+    project.aspectRatio as any,
+    project.globalContext,
+    project.visualStyle
+  )
+
+          }
+    
       startPrompt,
       project.aspectRatio as any,
       project.globalContext,
