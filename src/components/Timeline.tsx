@@ -200,7 +200,10 @@ const Timeline: React.FC<TimelineProps> = ({
   const rect = e.currentTarget.getBoundingClientRect()
   const clickX = e.clientX - rect.left
 
-  const frameCount = scene.frames?.length || 1
+  const frameCount =
+  scene.clips?.flatMap(c => c.frames).length ||
+  scene.frames?.length ||
+  1
   const frameWidth = rect.width / frameCount
 
   const clickedFrame = Math.floor(clickX / frameWidth)
