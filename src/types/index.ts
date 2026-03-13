@@ -72,6 +72,8 @@ export interface Scene {
   targetImageUrl?: string;
   videoUrl?: string;
 
+  referenceFrameUrl?: string
+
   // Stock montage shots
   frames: Frame[];
   clips?: Clip[]
