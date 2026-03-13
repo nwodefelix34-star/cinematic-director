@@ -261,17 +261,30 @@ onOpenFrameEditor()
   </div>
 )}
 
-                      {scene.frames && scene.frames.length > 1 && (
-  <div className="absolute inset-0 flex pointer-events-none">
-    {scene.frames.map((frame, i) => (
+                      {(scene.clips && scene.clips.length > 0) ? (
+  <div className="absolute inset-0 flex">
+
+    {scene.clips.flatMap(clip => clip.frames).map((frame, i) => (
+
       <div
         key={frame.id}
-        className="border-r border-white/20"
-        style={{ width: `${100 / scene.frames.length}%` }}
-      />
+        className="h-full"
+        style={{
+          width: `${100 / scene.clips.flatMap(c => c.frames).length}%`
+        }}
+      >
+        {frame.imageUrl && (
+          <img
+            src={frame.imageUrl}
+            className="w-full h-full object-cover opacity-60 pointer-events-none"
+          />
+        )}
+      </div>
+
     ))}
+
   </div>
-)}
+) : (
                         
                         <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
                           {dur.toFixed(1)}s
