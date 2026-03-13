@@ -151,13 +151,16 @@ const lastFrame = scene.frames[scene.frames.length - 1]
 
 if (!lastFrame.imageUrl) return null
 
-const startFrame = scene.frames[0]
-const targetFrame = scene.frames[scene.frames.length - 1]
+const firstClip = scene.clips?.[0]
 
+if (!firstClip || firstClip.frames.length < 2) return null
+
+const startFrame = firstClip.frames[0]
+const targetFrame = firstClip.frames[firstClip.frames.length - 1]
 const motionPrompt =
   scene.videoPrompt ||
-  `${startFrame.prompt} transitioning into ${targetFrame.prompt}, cinematic motion`
-
+  `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
+  
 const url = await generateVideo(
   motionPrompt,
   startFrame.imageUrl,
