@@ -124,6 +124,7 @@ export interface VoiceSettings {
 
 export interface CharacterProfile {
   id: string
+  identityTag?: string
   name: string
   description: string
 
