@@ -2,6 +2,7 @@ import { Project, Scene, ProjectStatus } from "../types"
 import { buildImage, fetchStockImages } from "../engine/mediaEngine"
 import { analyzeStockPrompt } from "../engine/promptAnalyzer"
 import { planCinematicShots } from "../engine/shotPlanner"
+import { buildPrompt } from "../engine/promptBuilder"
 
 export async function generateSceneImage(
   scene: Scene,
@@ -63,7 +64,8 @@ return { frames, clips }
 
 if (imageProvider === "gemini") {
 
-  const shots = planCinematicShots(activePrompt)
+  const detailedPrompt = buildPrompt(scene, project)
+const shots = planCinematicShots(detailedPrompt)
 
   const clips = []
   let clipIndex = 0
