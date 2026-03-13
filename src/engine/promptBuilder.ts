@@ -6,10 +6,19 @@ export function buildPrompt(
   shotType: string = "cinematic shot"
 ) {
 
-  const character = project.characters?.[0]
-  const environment = project.environments?.[0]
+  const characters =
+  project.characters?.filter(c =>
+    scene.characterIds?.includes(c.id)
+  ) || []
 
-  const characterDescription = describeCharacter(character)
+const environment =
+  project.environments?.find(env =>
+    env.id === scene.environmentId
+  )
+  
+  const characterDescription = characters
+  .map(c => describeCharacter(c))
+  .join("\n")
   const environmentDescription = describeEnvironment(environment)
 
   const basePrompt = scene.aiPrompt || scene.stockQuery || ""
@@ -41,6 +50,7 @@ function describeCharacter(character?: CharacterProfile) {
   return `
 character description:
 ${character.name || "character"},
+identity anchor: ${character.identityTag || "character_main"},
 ${character.description || ""},
 
 appearance:
