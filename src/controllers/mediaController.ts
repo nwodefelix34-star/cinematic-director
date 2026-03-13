@@ -87,12 +87,6 @@ if (!startImage) {
   )
 
           }
-    
-      startPrompt,
-      project.aspectRatio as any,
-      project.globalContext,
-      project.visualStyle
-    )
 
     const targetImage = await buildImage(
       targetPrompt,
@@ -122,6 +116,10 @@ if (!startImage) {
       }
 
     ]
+
+    if (!scene.referenceFrameUrl) {
+  scene.referenceFrameUrl = startImage
+    }
 
     clips.push({
       id: "clip-" + Date.now() + "-" + clipIndex,
