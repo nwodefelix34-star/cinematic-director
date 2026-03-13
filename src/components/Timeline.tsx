@@ -231,13 +231,17 @@ onOpenFrameEditor()
                           <i className="fas fa-times text-[8px]"></i>
                         </button>
 
-                        {scene.frames && scene.frames.length > 0 ? (
+                        {(scene.clips && scene.clips.length > 0) ? (
   <div className="absolute inset-0 flex">
-    {scene.frames.map((frame, i) => (
+
+    {scene.clips.flatMap(clip => clip.frames).map((frame, i) => (
+
       <div
         key={frame.id}
         className="h-full"
-        style={{ width: `${100 / scene.frames.length}%` }}
+        style={{
+          width: `${100 / scene.clips.flatMap(c => c.frames).length}%`
+        }}
       >
         {frame.imageUrl && (
           <img
@@ -246,9 +250,12 @@ onOpenFrameEditor()
           />
         )}
       </div>
+
     ))}
+
   </div>
 ) : (
+                        
   <div className="opacity-10 scale-75">
     <i className="fas fa-image text-lg"></i>
   </div>
