@@ -2,7 +2,7 @@ export function planCinematicShots(prompt: string) {
 
   const base = prompt.trim()
 
-  return [
+  const shots = [
 
     {
       prompt: `${base}, wide establishing shot`,
@@ -20,5 +20,46 @@ export function planCinematicShots(prompt: string) {
     }
 
   ]
+
+  return shots.map(shot => {
+
+    const frames = buildKeyframes(shot.prompt)
+
+    return {
+      ...shot,
+      frames
+    }
+
+  })
+
+}
+
+
+
+function buildKeyframes(prompt: string) {
+
+  const frames = []
+
+  const maxFrames = 5
+
+  const actions = [
+
+    `${prompt}, beginning moment`,
+    `${prompt}, action starting`,
+    `${prompt}, action progressing`,
+    `${prompt}, action nearing completion`,
+    `${prompt}, final moment`
+
+  ]
+
+  for (let i = 0; i < actions.length; i++) {
+
+    if (frames.length >= maxFrames) break
+
+    frames.push(actions[i])
+
+  }
+
+  return frames
 
 }
