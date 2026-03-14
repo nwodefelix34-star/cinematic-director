@@ -675,7 +675,7 @@ setSavedIdeas(prev => ({
   numScenes
 );
 
-const entities = analyzeEntities(autoTopic);
+const entities = analyzeEntities(result);
       
       const channelPacing = {
   mindforged: { first: 0.75, last: 1.25 },
