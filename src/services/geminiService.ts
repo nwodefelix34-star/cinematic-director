@@ -796,15 +796,17 @@ export const generateVideo = async (
     config: { thinkingConfig: { thinkingBudget: 4000 } }
   });
 
-  const imaginedPrompt = imagineResponse.text || prompt;
+  const imaginedPrompt =
+  imagineResponse.text ||
+  `${prompt}. Motion evolves from the first frame into the second frame with natural cinematic movement.`;
   
   let operation = await ai.models.generateVideos({
     model: 'veo-3.1-generate-preview',
     prompt: imaginedPrompt,
     image: {
-      imageBytes: base64Image.split(',')[1],
-      mimeType: 'image/png',
-    },
+  imageBytes: startImage.split(',')[1],
+  mimeType: 'image/png',
+},
     config: {
       numberOfVideos: 1,
       resolution: resolution,
