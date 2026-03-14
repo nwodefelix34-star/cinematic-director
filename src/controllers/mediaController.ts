@@ -133,12 +133,6 @@ export async function generateSceneVideo(
   generateVideo: any
 ) {
 
-if (!scene.frames || scene.frames.length === 0) return null
-
-const lastFrame = scene.frames[scene.frames.length - 1]
-
-if (!lastFrame.imageUrl) return null
-
 if (!scene.clips || scene.clips.length === 0) return null
 
 const updatedFrames = []
