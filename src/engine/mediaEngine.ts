@@ -29,20 +29,22 @@ export async function buildImage(
 
 export async function buildVideo(
   prompt: string,
-  imageUrl: string,
+  startImageUrl: string,
+  targetImageUrl: string,
   aspectRatio: '9:16' | '16:9',
   style: string,
   context: string,
   resolution: string
 ) {
   return await generateVideo(
-    prompt,
-    imageUrl,
-    aspectRatio,
-    style,
-    context,
-    resolution
-  )
+  prompt,
+  startImageUrl,
+  targetImageUrl,
+  aspectRatio,
+  style,
+  context,
+  resolution
+)
 }
 
 
