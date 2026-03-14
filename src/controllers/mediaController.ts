@@ -177,26 +177,4 @@ for (const clip of scene.clips) {
 return {
   frames: updatedFrames
 }
-const motionPrompt =
-  scene.videoPrompt ||
-  `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
-  
-const url = await generateVideo(
-  motionPrompt,
-  startFrame.imageUrl,
-  targetFrame.imageUrl,
-  project.aspectRatio,
-  project.visualStyle,
-  project.globalContext,
-  project.resolution
-)
-const updatedFrames = scene.frames.map(frame =>
-frame.id === lastFrame.id
-? { ...frame, videoUrl: url }
-: frame
-)
-
-return {
-frames: updatedFrames
-}
 }
