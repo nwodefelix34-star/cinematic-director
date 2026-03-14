@@ -108,9 +108,6 @@ for (const framePrompt of shot.frames) {
   frameIndex++
 
 }
-    if (!scene.referenceFrameUrl) {
-  scene.referenceFrameUrl = startImage
-    }
 
     clips.push({
       id: "clip-" + Date.now() + "-" + clipIndex,
