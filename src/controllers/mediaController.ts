@@ -139,12 +139,44 @@ const lastFrame = scene.frames[scene.frames.length - 1]
 
 if (!lastFrame.imageUrl) return null
 
-const firstClip = scene.clips?.[0]
+if (!scene.clips || scene.clips.length === 0) return null
 
-if (!firstClip || firstClip.frames.length < 2) return null
+const updatedFrames = []
 
-const startFrame = firstClip.frames[0]
-const targetFrame = firstClip.frames[firstClip.frames.length - 1]
+for (const clip of scene.clips) {
+
+  if (!clip.frames || clip.frames.length < 2) continue
+
+  const startFrame = clip.frames[0]
+  const targetFrame = clip.frames[clip.frames.length - 1]
+
+  const motionPrompt =
+    scene.videoPrompt ||
+    `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
+
+  const url = await generateVideo(
+    motionPrompt,
+    startFrame.imageUrl,
+    targetFrame.imageUrl,
+    project.aspectRatio,
+    project.visualStyle,
+    project.globalContext,
+    project.resolution
+  )
+
+  const updatedClipFrames = clip.frames.map(frame =>
+    frame.id === targetFrame.id
+      ? { ...frame, videoUrl: url }
+      : frame
+  )
+
+  updatedFrames.push(...updatedClipFrames)
+
+}
+
+return {
+  frames: updatedFrames
+}
 const motionPrompt =
   scene.videoPrompt ||
   `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
