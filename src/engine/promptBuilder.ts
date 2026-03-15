@@ -61,6 +61,7 @@ function describeCharacter(character?: CharacterProfile) {
 character description:
 ${character.name || "character"},
 identity anchor: ${character.identityTag || "character_main"},
+reference image: ${character.referenceImage || "none"},
 ${character.description || ""},
 
 appearance:
