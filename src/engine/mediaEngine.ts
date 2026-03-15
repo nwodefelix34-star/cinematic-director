@@ -1,5 +1,4 @@
 import { generateImage, generateVideo } from "../services/geminiService"
-import { buildVideo } from "../engine/mediaEngine"
 
 const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY
@@ -23,7 +22,6 @@ export async function buildImage(
   )
 }
 
-
 // ===============================
 // AI VIDEO
 // ===============================
@@ -37,15 +35,15 @@ export async function buildVideo(
   context: string,
   resolution: string
 ) {
-  return await buildVideo(
-  prompt,
-  startImageUrl,
-  targetImageUrl,
-  aspectRatio,
-  style,
-  context,
-  resolution
-)
+  return await generateVideo(
+    prompt,
+    startImageUrl,
+    targetImageUrl,
+    aspectRatio,
+    style,
+    context,
+    resolution
+  )
 }
 
 
