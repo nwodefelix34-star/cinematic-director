@@ -29,8 +29,8 @@ const environment =
   const characterDescription = characters
   .map(c => describeCharacter(c))
   .join("\n")
-  const environmentDescription = describeEnvironment(environment)
-
+  const environmentDescription =
+  environment ? describeEnvironment(environment) : ""
   const basePrompt = scene.aiPrompt || scene.stockQuery || ""
 
   const style = project.visualStyle || "cinematic realism"
