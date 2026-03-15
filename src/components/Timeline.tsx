@@ -11,6 +11,7 @@ interface TimelineProps {
   onRemoveScene: (id: string) => void;
   onUpdateSceneDuration: (id: string, duration: number) => void;
   onUpdateNarrationDuration: (id: string, duration: number) => void;
+  onSplitClip: (sceneId: string, clipIndex: number, time: number) => void;
   onUpdateGlobalClip: (trackIndex: number, clipId: string, updates: Partial<AudioClip>, finalize?: boolean) => void;
   onAddGlobalClip: (trackIndex: number, startTime: number) => void;
   onRemoveGlobalClip: (trackIndex: number, clipId: string) => void;
@@ -44,6 +45,7 @@ const Timeline: React.FC<TimelineProps> = ({
   onRemoveScene,
   onUpdateSceneDuration,
   onUpdateNarrationDuration,
+  onSplitClip,
   onUpdateGlobalClip,
   onAddGlobalClip,
   onRemoveGlobalClip,
