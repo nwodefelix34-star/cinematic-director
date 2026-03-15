@@ -164,6 +164,32 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
+      {activeSceneId && (
+        <div className="h-8 bg-[#0f0f16] border-b border-white/5 flex items-center gap-3 px-3 text-[9px] text-slate-400">
+
+          <button className="hover:text-white transition">
+            ✂ Split
+          </button>
+
+          <button className="hover:text-white transition">
+            ⧉ Duplicate
+          </button>
+
+          <button className="hover:text-white transition">
+            ✂ Trim
+          </button>
+
+          <button className="hover:text-white transition">
+            ⚡ Speed
+          </button>
+
+          <button className="hover:text-white transition">
+            🎬 Frames
+          </button>
+
+        </div>
+      )}
+
       {!isMinimized && (
         <div ref={containerRef} className="flex-1 overflow-x-auto overflow-y-auto custom-scroll px-3 sm:px-4 py-3 relative">
           <div className="flex flex-col gap-4 min-w-max relative pb-4">
