@@ -36,11 +36,11 @@ const environment =
   const style = project.visualStyle || "cinematic realism"
 
   const finalPrompt = `
-${shotType} of ${basePrompt},
+${shotType} of ${basePrompt}
 
-${characterDescription},
+${characterDescription}
 
-${environmentDescription ? `set inside ${environmentDescription},` : ""}
+${environmentDescription ? `set inside ${environmentDescription}` : ""}
 
 visual style: ${style},
 cinematic lighting,
