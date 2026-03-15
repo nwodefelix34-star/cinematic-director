@@ -142,6 +142,8 @@ export interface CharacterProfile {
 
   clothing?: string
   accessories?: string
+
+  referenceImage?: string
 }
 
 
