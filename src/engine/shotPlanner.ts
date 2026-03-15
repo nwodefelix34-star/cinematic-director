@@ -1,4 +1,8 @@
-export function planCinematicShots(prompt: string) {
+export function planCinematicShots(prompt: string): {
+  prompt: string
+  motion: string
+  frames: string[]
+}[] {
 
   const base = prompt.trim()
 
@@ -38,9 +42,7 @@ export function planCinematicShots(prompt: string) {
 
 function buildKeyframes(prompt: string) {
 
-  const frames = []
-
-  const maxFrames = 5
+  const frames: string[] = []
 
   const actions = [
 
@@ -52,12 +54,8 @@ function buildKeyframes(prompt: string) {
 
   ]
 
-  for (let i = 0; i < actions.length; i++) {
-
-    if (frames.length >= maxFrames) break
-
-    frames.push(actions[i])
-
+  for (const action of actions) {
+    frames.push(action)
   }
 
   return frames
