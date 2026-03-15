@@ -6,10 +6,20 @@ export function buildPrompt(
   shotType: string = "cinematic shot"
 ) {
 
-  const characters =
-  project.characters?.filter(c =>
-    scene.characterIds?.includes(c.id)
-  ) || []
+  let characters: CharacterProfile[] = []
+
+if (scene.characterIds && scene.characterIds.length > 0) {
+
+  characters =
+    project.characters?.filter(c =>
+      scene.characterIds?.includes(c.id)
+    ) || []
+
+} else {
+
+  characters = project.characters || []
+
+}
 
 const environment =
   project.environments?.find(env =>
