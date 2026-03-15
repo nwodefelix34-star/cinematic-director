@@ -1,4 +1,5 @@
 import { generateImage, generateVideo } from "../services/geminiService"
+import { buildVideo } from "../engine/mediaEngine"
 
 const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY
@@ -36,7 +37,7 @@ export async function buildVideo(
   context: string,
   resolution: string
 ) {
-  return await generateVideo(
+  return await buildVideo(
   prompt,
   startImageUrl,
   targetImageUrl,
@@ -66,8 +67,14 @@ async function searchPixabay(query: string) {
     `&per_page=5`
 
   const res = await fetch(url)
-  const data = await res.json()
 
+if (!res.ok) {
+  console.warn("Pixabay request failed")
+  return []
+}
+
+const data = await res.json()
+  
   if (!data.hits) return []
 
   return data.hits.map((img: any) => ({
@@ -92,6 +99,10 @@ async function searchUnsplash(query: string) {
     `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=5`
 
   const res = await fetch(url, {
+    if (!res.ok) {
+  console.warn("Unsplash request failed")
+  return []
+  }
     headers: {
       Authorization: `Client-ID ${UNSPLASH_KEY}`
     }
@@ -120,6 +131,8 @@ export async function fetchStockImages(query: string) {
   ])
 
   const combined = [...pixabay, ...unsplash]
+    .sort(() => Math.random() - 0.5)
 
-  return combined
+  return combined.slice(0, 8)
+
 }
