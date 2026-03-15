@@ -234,11 +234,9 @@ onOpenFrameEditor()
                           <i className="fas fa-times text-[8px]"></i>
                         </button>
 
-                        {(scene.clips && scene.clips.length > 0) ? (
+                        {scene.clips && scene.clips.length > 0 ? (
   <div className="absolute inset-0 flex">
-
-    {scene.clips.flatMap(clip => clip.frames).map((frame, i) => (
-
+    {scene.clips.flatMap(clip => clip.frames).map((frame) => (
       <div
         key={frame.id}
         className="h-full"
@@ -253,42 +251,14 @@ onOpenFrameEditor()
           />
         )}
       </div>
-
     ))}
-
-  </div>
-) : (
-                        
-  <div className="opacity-10 scale-75">
-    <i className="fas fa-image text-lg"></i>
-  </div>
-)}
-
-                      {(scene.clips && scene.clips.length > 0) ? (
-  <div className="absolute inset-0 flex">
-
-    {scene.clips.flatMap(clip => clip.frames).map((frame, i) => (
-
-      <div
-        key={frame.id}
-        className="h-full"
-        style={{
-          width: `${100 / scene.clips.flatMap(c => c.frames).length}%`
-        }}
-      >
-        {frame.imageUrl && (
-          <img
-            src={frame.imageUrl}
-            className="w-full h-full object-cover opacity-60 pointer-events-none"
-          />
-        )}
-      </div>
-
-    ))}
-
   </div>
 ) : (
   <>
+    <div className="opacity-10 scale-75">
+      <i className="fas fa-image text-lg"></i>
+    </div>
+
     <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
       {dur.toFixed(1)}s
     </div>
@@ -302,7 +272,7 @@ onOpenFrameEditor()
       <div className="w-[1px] h-4 bg-[#3ab7bf]/50 rounded-full"></div>
     </div>
   </>
-  )
+)}
 );
                   })}
                </div>
