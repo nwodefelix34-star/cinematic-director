@@ -429,7 +429,7 @@ ${CHANNEL_VIRAL_STYLES[channelId] || ""}
 `; 
     
   const ai = getAI();
-  console.log("API KEY:", import.meta.env.VITE_API_KEY);
+  
   const format = isShort ? "YouTube Short (9:16)" : "Cinematic (16:9)";
     const channelVisualStyle = {
   futurelife: "Ultra cinematic, emotional, dramatic lighting, film-grade realism",
