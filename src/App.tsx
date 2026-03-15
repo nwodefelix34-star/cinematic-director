@@ -600,6 +600,48 @@ const currentFrame =
     }));
   };
 
+  const splitScene = (sceneId: string) => {
+
+  saveToHistory()
+
+  setProject(prev => {
+
+    const index = prev.scenes.findIndex(s => s.id === sceneId)
+
+    if (index === -1) return prev
+
+    const scene = prev.scenes[index]
+
+    const duration = scene.duration || prev.sceneDuration
+    const half = duration / 2
+
+    const firstScene = {
+      ...scene,
+      id: scene.id + "-A",
+      duration: half,
+      narrationDuration: half
+    }
+
+    const secondScene = {
+      ...scene,
+      id: scene.id + "-B",
+      duration: half,
+      narrationDuration: half
+    }
+
+    const newScenes = [...prev.scenes]
+
+    newScenes.splice(index, 1, firstScene, secondScene)
+
+    return {
+      ...prev,
+      scenes: newScenes
+    }
+
+  })
+
+  }
+
   const handleRemoveScene = (id: string) => {
     saveToHistory();
     setProject(p => {
