@@ -15,14 +15,18 @@ export async function buildImage(
   prompt: string,
   aspectRatio: '9:16' | '16:9',
   context: string,
-  style: string
+  style: string,
+  provider: "gemini" | "flux" | "nanobanana" | "imagefx" = "gemini"
 ) {
-  return await generateImage(
+
+  return generateImageRouter(
+    provider,
     prompt,
     aspectRatio,
     context,
     style
   )
+
 }
 
 // ===============================
@@ -32,21 +36,23 @@ export async function buildImage(
 export async function buildVideo(
   prompt: string,
   startImageUrl: string,
-  targetImageUrl: string,
   aspectRatio: '9:16' | '16:9',
   style: string,
   context: string,
-  resolution: string
+  resolution: '720p' | '1080p',
+  provider: "veo" | "runway" | "kling" | "grok" = "veo"
 ) {
-  return await generateVideo(
+
+  return generateVideoRouter(
+    provider,
     prompt,
     startImageUrl,
-    targetImageUrl,
     aspectRatio,
     style,
     context,
     resolution
   )
+
 }
 
 
