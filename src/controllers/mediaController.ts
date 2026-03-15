@@ -8,7 +8,7 @@ export async function generateSceneImage(
   scene: Scene,
   project: Project,
   mediaMode: "ai" | "stock",
-  imageProvider: "gemini" | "flow" | "wix"
+  imageProvider: "gemini" | "flux" | "nanobanana" | "imagefx"
 ) {
 
   if (!scene) return null
