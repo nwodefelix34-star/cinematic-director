@@ -40,6 +40,7 @@ import { generateSceneImage } from "./controllers/mediaController"
 import { generateSceneVideo } from "./controllers/mediaController";
 import { analyzeStockPrompt } from "./engine/promptAnalyzer";
 import { analyzeEntities } from "./engine/entityAnalyzer";
+import { mapCharactersToScenes } from "./engine/sceneCharacterMapper"
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
