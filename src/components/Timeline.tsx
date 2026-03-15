@@ -288,16 +288,22 @@ onOpenFrameEditor()
 
   </div>
 ) : (
-                        
-                        <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
-                          {dur.toFixed(1)}s
-                        </div>
+  <>
+    <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
+      {dur.toFixed(1)}s
+    </div>
 
-                        <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'visual', 'resize-right', dur)} className="absolute right-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/60 cursor-ew-resize transition-all z-20 flex items-center justify-center">
-                           <div className="w-[1px] h-4 bg-[#3ab7bf]/50 rounded-full"></div>
-                        </div>
-                      </div>
-                    );
+    <div
+      onMouseDown={(e) =>
+        handleMouseDown(e, scene.id, 'visual', 'resize-right', dur)
+      }
+      className="absolute right-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/60 cursor-ew-resize transition-all z-20 flex items-center justify-center"
+    >
+      <div className="w-[1px] h-4 bg-[#3ab7bf]/50 rounded-full"></div>
+    </div>
+  </>
+  )
+);
                   })}
                </div>
             </div>
