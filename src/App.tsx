@@ -343,6 +343,7 @@ const timelineMax = clipDuration * 1.5
 const clipPercent = (clipDuration / timelineMax) * 100
   
   const [frameIndex, setFrameIndex] = useState(0);
+  const [snapEnabled, setSnapEnabled] = useState(true);
 
 const [timelineMode, setTimelineMode] =
 useState<'scene' | 'frame'>('scene');
