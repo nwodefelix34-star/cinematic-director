@@ -273,7 +273,9 @@ onOpenFrameEditor()
     </div>
   </>
 )}
-                  })}
+</div>
+);
+})}
                </div>
             </div>
 
