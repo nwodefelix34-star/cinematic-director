@@ -163,8 +163,8 @@ for (const clip of scene.clips) {
   const targetFrame = clip.frames[clip.frames.length - 1]
 
   const motionPrompt =
-    scene.videoPrompt ||
-    `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
+scene.videoPrompt ||
+`${startFrame.prompt}, ${shot.motion}, evolving into ${targetFrame.prompt}`, natural movement, smooth camera motion`
 
   if (!startFrame.imageUrl || !targetFrame.imageUrl) continue
 
