@@ -65,13 +65,13 @@ reference image: ${character.referenceImage || "none"},
 ${character.description || ""},
 
 appearance:
-gender: ${character.appearance.gender || ""},
-age: ${character.appearance.age || ""},
-ethnicity: ${character.appearance.ethnicity || ""},
-face: ${character.appearance.face || ""},
-hair: ${character.appearance.hair || ""},
-eyes: ${character.appearance.eyes || ""},
-facial hair: ${character.appearance.facialHair || ""},
+gender: ${character.appearance?.gender || ""},
+age: ${character.appearance?.age || ""},
+ethnicity: ${character.appearance?.ethnicity || ""},
+face: ${character.appearance?.face || ""},
+hair: ${character.appearance?.hair || ""},
+eyes: ${character.appearance?.eyes || ""},
+facial hair: ${character.appearance?.facialHair || ""},
 
 clothing:
 ${character.clothing || ""},
