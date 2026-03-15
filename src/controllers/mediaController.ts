@@ -169,14 +169,13 @@ for (const clip of scene.clips) {
   if (!startFrame.imageUrl || !targetFrame.imageUrl) continue
 
   const url = await generateVideo(
-    motionPrompt,
-    startFrame.imageUrl,
-    targetFrame.imageUrl,
-    project.aspectRatio,
-    project.visualStyle,
-    project.globalContext,
-    project.resolution
-  )
+  motionPrompt,
+  startFrame.imageUrl,
+  project.aspectRatio,
+  project.visualStyle,
+  project.globalContext,
+  project.resolution
+)
 
   const updatedClipFrames = clip.frames.map(frame =>
     frame.id === targetFrame.id
@@ -189,6 +188,7 @@ for (const clip of scene.clips) {
 }
 
 return {
-  frames: updatedFrames
+  frames: updatedFrames,
+  clips: scene.clips
 }
 }
