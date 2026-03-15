@@ -804,7 +804,7 @@ export const generateVideo = async (
     model: 'veo-3.1-generate-preview',
     prompt: imaginedPrompt,
     image: {
-  imageBytes: startImage.split(',')[1],
+  imageBytes: base64Image.split(',')[1],
   mimeType: 'image/png',
 },
     config: {
