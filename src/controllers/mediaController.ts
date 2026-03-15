@@ -76,11 +76,14 @@ const shots = planCinematicShots(detailedPrompt)
 let frameIndex = 0
 
 for (const framePrompt of shot.frames) {
+for (const framePrompt of shot.frames) {
 
   let imageUrl = null
 
   if (frameIndex === 0 && scene.referenceFrameUrl) {
+
     imageUrl = scene.referenceFrameUrl
+
   } else {
 
     imageUrl = await buildImage(
@@ -89,6 +92,22 @@ for (const framePrompt of shot.frames) {
       project.globalContext,
       project.visualStyle
     )
+
+    // Character identity capture
+
+    if (scene.characterIds && scene.characterIds.length > 0) {
+
+      const mainCharacterId = scene.characterIds[0]
+
+      const character = project.characters?.find(
+        c => c.id === mainCharacterId
+      )
+
+      if (character && !character.referenceImage) {
+        character.referenceImage = imageUrl
+      }
+
+    }
 
   }
 
@@ -107,7 +126,7 @@ for (const framePrompt of shot.frames) {
 
   frameIndex++
 
-}
+      }
 
     clips.push({
       id: "clip-" + Date.now() + "-" + clipIndex,
