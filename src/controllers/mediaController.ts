@@ -72,12 +72,11 @@ const shots = planCinematicShots(detailedPrompt)
 
   for (const shot of shots) {
 
-    const frames = []
-let frameIndex = 0
+  const frames = []
+  let frameIndex = 0
 
-for (const framePrompt of shot.frames) {
-for (const framePrompt of shot.frames) {
-
+  for (const framePrompt of shot.frames) {
+    
   let imageUrl = null
 
   if (frameIndex === 0 && scene.referenceFrameUrl) {
@@ -116,7 +115,7 @@ for (const framePrompt of shot.frames) {
   }
 
   frames.push({
-    id: "frame-" + Date.now() + "-" + frameIndex,
+    id: crypto.randomUUID(),
     index: frameIndex,
     prompt: framePrompt,
     imageUrl: imageUrl,
@@ -166,6 +165,8 @@ for (const clip of scene.clips) {
   const motionPrompt =
     scene.videoPrompt ||
     `${startFrame.prompt}, cinematic motion evolving into ${targetFrame.prompt}, natural movement, smooth camera motion`
+
+  if (!startFrame.imageUrl || !targetFrame.imageUrl) continue
 
   const url = await generateVideo(
     motionPrompt,
