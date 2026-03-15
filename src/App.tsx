@@ -756,7 +756,7 @@ setProject(prev => ({
 
     const newScenes: Scene[] = result.scenes.map((s, idx): Scene => ({
       id: `sc-future-${idx}-${Date.now()}`,
-      prompt: s.prompt,
+      aiPrompt: s.prompt,
       narrationChunk: s.narration,
       status: 'ready',
       duration: project.sceneDuration,
@@ -805,7 +805,7 @@ setProject(prev => ({
 
     const newScenes: Scene[] = result.scenes.map((s, idx): Scene => ({
       id: `sc-knowit-${idx}-${Date.now()}`,
-      prompt: s.prompt,
+      aiPrompt: s.prompt,
       narrationChunk: s.narration,
       status: 'ready',
       duration: project.sceneDuration,
@@ -904,11 +904,13 @@ setProject(prev => ({
 }
 
   const handleGrokBridgeGeneration = async () => {
-    if (!activeScene.imageUrl) return;
+    if (!currentFrame?.imageUrl) return;
     setGrokBridgeStatus('generating');
     setProjectStatus(ProjectStatus.GROK_BRIDGE);
     try {
-      const url = await generateVideo(`Cinematic Studio Motion: ${activeScene.prompt}`, activeScene.imageUrl, project.aspectRatio as any, `${project.visualStyle}, Cinema Grade`, project.globalContext, '1080p');
+      const url = await generateVideo(
+  `Cinematic Studio Motion: ${activeScene.aiPrompt}`,
+  currentFrame.imageUrl, project.aspectRatio as any, `${project.visualStyle}, Cinema Grade`, project.globalContext, '1080p');
       updateScene(activeSceneId, { videoUrl: url, status: 'ready' }, true);
       setGrokBridgeStatus('ready');
       setIsGrokStudioOpen(false);
