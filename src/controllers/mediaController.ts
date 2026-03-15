@@ -37,7 +37,7 @@ export async function generateSceneImage(
         const options = images.map(img => img.url)
 
         frames.push({
-  id: crypto.randomUUID()
+  id: crypto.randomUUID(),
   index: frames.length,
   prompt: shot.prompt,
   imageUrl: options[0],
