@@ -27,21 +27,42 @@ export function analyzeStockPrompt(query: string): ShotResult[] {
   // If still only one part, force cinematic breakdown
   if (parts.length < 2) {
 
-  const words = query.split(" ")
+    const words = query.split(" ")
+    const segmentSize = Math.ceil(words.length / 2)
 
-  const segmentSize = Math.ceil(words.length / 2)
+    parts = [
+      words.slice(0, segmentSize).join(" "),
+      words.slice(segmentSize).join(" ")
+    ].filter(p => p.length > 3)
 
-  parts = [
-    words.slice(0, segmentSize).join(" "),
-    words.slice(segmentSize).join(" ")
-  ].filter(p => p.length > 3)
-
-}
+  }
 
   const elements = parts.slice(0, MAX_SHOTS)
 
   return elements.map((el, index) => ({
+
     id: "shot-" + index + "-" + Date.now(),
-    prompt: el
+
+    prompt: buildStockSearchPrompt(el)
+
   }))
+}
+
+
+function buildStockSearchPrompt(text: string) {
+
+  const base = text.trim()
+
+  const keywords = [
+
+    "cinematic",
+    "natural lighting",
+    "realistic",
+    "high quality",
+    "documentary style"
+
+  ]
+
+  return `${base}, ${keywords.join(", ")}`
+
 }
