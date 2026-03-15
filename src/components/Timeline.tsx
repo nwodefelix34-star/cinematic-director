@@ -164,7 +164,7 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {activeSceneId && (
+      {activeSceneId !== "" && (
         <div className="h-8 bg-[#0f0f16] border-b border-white/5 flex items-center gap-3 px-3 text-[9px] text-slate-400">
 
           <button className="hover:text-white transition">
