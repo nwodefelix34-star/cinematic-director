@@ -1938,7 +1938,7 @@ if (appMode === 'ideas') {
            onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, 
   {
   id: 'sc-' + Date.now(),
-  order: p.scenes.length
+  order: p.scenes.length,
   mediaType: 'ai',
 
   aiPrompt: '',
