@@ -170,6 +170,7 @@ scene.videoPrompt ||
   const url = await generateVideo(
   motionPrompt,
   startFrame.imageUrl,
+  targetFrame.imageUrl,
   project.aspectRatio,
   project.visualStyle,
   project.globalContext,
