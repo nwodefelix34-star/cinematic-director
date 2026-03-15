@@ -1,4 +1,7 @@
-import { generateImage, generateVideo } from "../services/geminiService"
+import {
+  generateImageRouter,
+  generateVideoRouter
+} from "./providerRouter"
 
 const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY
