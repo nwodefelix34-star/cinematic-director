@@ -236,6 +236,20 @@ onOpenFrameEditor()
                           <i className="fas fa-times text-[8px]"></i>
                         </button>
 
+                        <button
+  onClick={(e) => {
+    e.stopPropagation()
+
+    const splitTime =
+      (scene.duration || defaultDuration) / 2
+
+    onSplitClip(scene.id, 0, splitTime)
+  }}
+  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-yellow-500/80 text-black flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-yellow-400 transition-all z-30 scale-75"
+>
+  <i className="fas fa-scissors text-[8px]"></i>
+</button>
+
                         {scene.clips && scene.clips.length > 0 ? (
   <div className="absolute inset-0 flex">
     {scene.clips.flatMap(clip => clip.frames).map((frame) => (
