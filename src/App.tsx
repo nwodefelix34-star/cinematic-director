@@ -711,7 +711,12 @@ stockQuery: s.stockQuery,
         sfxPrompt: s.sfx
 };
 });
-      setProject(prev => ({ 
+      const mappedScenes = mapCharactersToScenes(
+  newScenes,
+  entities.characters
+)
+
+setProject(prev => ({ 
   ...prev,
   title: result.title,
   globalContext: result.globalContext,
@@ -720,7 +725,7 @@ stockQuery: s.stockQuery,
   characters: entities.characters,
   environments: entities.environments,
 
-  scenes: newScenes
+  scenes: mappedScenes
 }));
       setActiveSceneId(newScenes[0].id);
       setProjectStatus(ProjectStatus.IDLE);
