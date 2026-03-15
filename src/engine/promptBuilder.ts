@@ -40,7 +40,7 @@ ${shotType} of ${basePrompt},
 
 ${characterDescription},
 
-set inside ${environmentDescription},
+${environmentDescription ? `set inside ${environmentDescription},` : ""}
 
 visual style: ${style},
 cinematic lighting,
