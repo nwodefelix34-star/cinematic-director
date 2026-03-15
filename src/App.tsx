@@ -917,11 +917,11 @@ setProject(prev => ({
   };
 
   const handleEnhancePromptAction = async () => {
-    if (!activeScene.prompt) return;
+    if (!activeScene.aiPrompt) return;
     setIsEnhancingPrompt(true);
     try {
-      const enhanced = await enhancePrompt(activeScene.prompt);
-      updateScene(activeSceneId, { prompt: enhanced }, true);
+      const enhanced = await enhancePrompt(activeScene.aiPrompt);
+      updateScene(activeSceneId, { aiPrompt: enhanced }, true);
     } catch (err) {} finally { setIsEnhancingPrompt(false); }
   };
 
