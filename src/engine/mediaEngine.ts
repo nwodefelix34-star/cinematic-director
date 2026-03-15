@@ -99,14 +99,15 @@ async function searchUnsplash(query: string) {
     `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=5`
 
   const res = await fetch(url, {
-    if (!res.ok) {
+  headers: {
+    Authorization: `Client-ID ${UNSPLASH_KEY}`
+  }
+})
+
+if (!res.ok) {
   console.warn("Unsplash request failed")
   return []
-  }
-    headers: {
-      Authorization: `Client-ID ${UNSPLASH_KEY}`
-    }
-  })
+}
 
   const data = await res.json()
 
