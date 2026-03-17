@@ -600,42 +600,53 @@ const currentFrame =
     }));
   };
 
-  const splitScene = (sceneId: string) => {
+  const handleSplitClip = (
+  sceneId: string,
+  clipIndex: number,
+  time: number
+) => {
 
   saveToHistory()
 
   setProject(prev => {
 
-    const index = prev.scenes.findIndex(s => s.id === sceneId)
+    const scene = prev.scenes.find(s => s.id === sceneId)
+    if (!scene || !scene.clips) return prev
 
-    if (index === -1) return prev
+    const clips = [...scene.clips]
+    const clip = clips[clipIndex]
 
-    const scene = prev.scenes[index]
+    if (!clip || !clip.frames || clip.frames.length < 2) return prev
 
-    const duration = scene.duration || prev.sceneDuration
-    const half = duration / 2
+    // 🔥 Find split point based on frames
+    const splitFrameIndex = Math.floor(clip.frames.length / 2)
 
-    const firstScene = {
-      ...scene,
-      id: scene.id + "-A",
-      duration: half,
-      narrationDuration: half
+    const firstFrames = clip.frames.slice(0, splitFrameIndex)
+    const secondFrames = clip.frames.slice(splitFrameIndex)
+
+    if (firstFrames.length === 0 || secondFrames.length === 0) return prev
+
+    const firstClip = {
+      ...clip,
+      id: crypto.randomUUID(),
+      frames: firstFrames
     }
 
-    const secondScene = {
-      ...scene,
-      id: scene.id + "-B",
-      duration: half,
-      narrationDuration: half
+    const secondClip = {
+      ...clip,
+      id: crypto.randomUUID(),
+      frames: secondFrames
     }
 
-    const newScenes = [...prev.scenes]
-
-    newScenes.splice(index, 1, firstScene, secondScene)
+    clips.splice(clipIndex, 1, firstClip, secondClip)
 
     return {
       ...prev,
-      scenes: newScenes
+      scenes: prev.scenes.map(s =>
+        s.id === sceneId
+          ? { ...s, clips }
+          : s
+      )
     }
 
   })
