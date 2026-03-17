@@ -277,7 +277,7 @@ onOpenFrameEditor()
     const splitTime =
       (scene.duration || defaultDuration) / 2
 
-    onSplitClip(scene.id, 0, splitTime)
+    onSplitClip(scene.id, -1, currentTime)
   }}
   className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-yellow-500/80 text-black flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-yellow-400 transition-all z-30 scale-75"
 >
