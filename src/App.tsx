@@ -1984,7 +1984,8 @@ if (appMode === 'ideas') {
       <footer className="bg-[#08080c] z-40 shrink-0 overflow-hidden shadow-[0_-10px_30px_rgba(0,0,0,0.5)]" style={{ height: timelineHeight }}>
         <Timeline 
            scenes={project.scenes} 
-           extraTracks={project.extraTracks} 
+           extraTracks={project.extraTracks}
+           onSplitClip={handleSplitClip}
            activeSceneId={activeSceneId} 
            onSelectScene={setActiveSceneId} 
            onOpenFrameEditor={() => setTimelineMode('frame')}
