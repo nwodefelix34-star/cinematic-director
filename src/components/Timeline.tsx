@@ -172,10 +172,7 @@ const Timeline: React.FC<TimelineProps> = ({
     const scene = scenes.find(s => s.id === activeSceneId)
     if (!scene) return
 
-    const splitTime =
-      (scene.duration || defaultDuration) / 2
-
-    onSplitClip(activeSceneId, 0, splitTime)
+    onSplitClip(activeSceneId, -1, currentTime)
   }}
   className="hover:text-white transition"
 >
