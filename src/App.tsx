@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Scene, 
-  Project, 
-  ProjectStatus, 
-  CaptionConfig, 
-  VoiceSettings, 
-  AudioClip, 
-  AudioConfig, 
-  ExportSettings, 
+import {
+  Scene,
+  Project,
+  ProjectStatus,
+  CaptionConfig,
+  VoiceSettings,
+  AudioClip,
+  AudioConfig,
+  ExportSettings,
   RenderingStatus,
   ChannelIdea,
   IdeaBatch,
@@ -16,8 +16,8 @@ import {
 } from './types';
 import ApiKeyPrompt from './components/ApiKeyPrompt';
 import Timeline from './components/Timeline';
-import { 
-  enhancePrompt, 
+import {
+  enhancePrompt,
   generateNarration,
   generateStoryboard,
   generateFutureLifeStory,
@@ -25,7 +25,9 @@ import {
   decodeBase64,
   decodeAudioData,
   generateImage,
-  generateVideo,
+  // ── generateVideo REMOVED — replaced by Hunyuan Bridge ──
+  // ── buildBridgePrompts added for Flow + Hunyuan bridge system ──
+  buildBridgePrompts,
   generateCustomStyle,
   generateIdeas
 } from './services/geminiService';
@@ -35,10 +37,10 @@ import {
   buildFutureLifeStoryboard,
   buildKnowItStoryboard
 } from "./engine/storyboardEngine";
-import { buildImage, buildVideo, fetchStockImages } from "./engine/mediaEngine";
+import { buildImage } from "./engine/mediaEngine";
+// ── fetchStockImages REMOVED — KnowIt3D is AI only ──
 import { generateSceneImage } from "./controllers/mediaController"
 import { generateSceneVideo } from "./controllers/mediaController";
-import { analyzeStockPrompt } from "./engine/promptAnalyzer";
 import { analyzeEntities } from "./engine/entityAnalyzer";
 import { mapCharactersToScenes } from "./engine/sceneCharacterMapper"
 
@@ -95,114 +97,57 @@ const ENTRANCE_ANIMATIONS = [
 ];
 
 type AppTab = 'story' | 'style' | 'visuals' | 'text' | 'voice' | 'score' | 'foley';
-
 type ChannelType = 'stock' | 'ai';
-
 
 interface ChannelDefinition {
   id: string;
   name: string;
   category: string;
-   icon: string;
-  primaryType: ChannelType; // stock or ai
-  defaultMode: VideoMode;   // velocity or cinematic
+  icon: string;
+  primaryType: ChannelType;
+  defaultMode: VideoMode;
 }
 
 const CHANNELS: ChannelDefinition[] = [
-  {
-    id: 'mindforged',
-    name: 'MindForged',
-    category: 'Philosophy & Psychology',
-    icon: 'fa-brain',
-    primaryType: 'stock',
-    defaultMode: 'velocity'
-  },
-  {
-    id: 'cosmora',
-    name: 'Cosmora',
-    category: 'Space & Science',
-    icon: 'fa-meteor',
-    primaryType: 'stock',
-    defaultMode: 'cinematic'
-  },
-  {
-    id: 'veiltheory',
-    name: 'VeilTheory',
-    category: 'Mystery & Conspiracy',
-    icon: 'fa-eye',
-    primaryType: 'stock',
-    defaultMode: 'cinematic'
-  },
-  {
-    id: 'futurelife',
-    name: 'Future Life Story',
-    category: 'AI Life Simulation',
-    icon: 'fa-robot',
-    primaryType: 'ai',
-    defaultMode: 'cinematic'
-  },
-  {
-    id: 'knowit',
-    name: 'Know It',
-    category: 'Educational Facts',
-    icon: 'fa-lightbulb',
-    primaryType: 'ai',
-    defaultMode: 'velocity'
-  }
+  { id: 'mindforged', name: 'MindForged', category: 'Philosophy & Psychology', icon: 'fa-brain', primaryType: 'stock', defaultMode: 'velocity' },
+  { id: 'cosmora', name: 'Cosmora', category: 'Space & Science', icon: 'fa-meteor', primaryType: 'stock', defaultMode: 'cinematic' },
+  { id: 'veiltheory', name: 'VeilTheory', category: 'Mystery & Conspiracy', icon: 'fa-eye', primaryType: 'stock', defaultMode: 'cinematic' },
+  { id: 'futurelife', name: 'Future Life Story', category: 'AI Life Simulation', icon: 'fa-robot', primaryType: 'ai', defaultMode: 'cinematic' },
+  { id: 'knowit', name: 'Know It', category: 'Educational Facts', icon: 'fa-lightbulb', primaryType: 'ai', defaultMode: 'velocity' }
 ];
 
 const App: React.FC = () => {
-  
-  // ======================
-// APP MODE SYSTEM
-// ======================
-const [appMode, setAppMode] =
-useState<'channels' | 'ideas' | 'editor'>('channels');
-  useEffect(() => {
-  console.log("APP MODE CHANGED:", appMode);
-}, [appMode]);
-  
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
-console.log("APP MODE:", appMode);
+
+  const [appMode, setAppMode] = useState<'channels' | 'ideas' | 'editor'>('channels');
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const hasKey = true;
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(ProjectStatus.IDLE);
   const [autoTopic, setAutoTopic] = useState('');
   const [isPlayingSequence, setIsPlayingSequence] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
 
-  // 🔥 Channel + Mode System
-const [selectedChannelId, setSelectedChannelId] = useState<string>('mindforged');
+  const [selectedChannelId, setSelectedChannelId] = useState<string>('mindforged');
+  // ── mediaMode: KnowIt is always 'ai' — stock removed for this channel ──
   const [mediaMode, setMediaMode] = useState<'stock' | 'ai'>('ai');
 
-  const [imageProvider, setImageProvider] =
-useState<'gemini' | 'flow' | 'wix'>('gemini');
-  
-  useEffect(() => {
-  const channel = CHANNELS.find(c => c.id === selectedChannelId);
-  if (!channel) return;
+  // ── imageProvider removed — KnowIt uses Flow Bridge, others use Gemini directly ──
+  // Kept as state for non-KnowIt channels only
+  const [imageProvider, setImageProvider] = useState<'gemini' | 'flow' | 'wix'>('gemini');
 
-  // Set default video mode
-  setVideoMode(channel.defaultMode);
+  // ── BRIDGE STATE ──
+  // Flow Bridge — for image generation (KnowIt channel)
+  const [isFlowBridgeOpen, setIsFlowBridgeOpen] = useState(false);
+  const [flowBridgePrompt, setFlowBridgePrompt] = useState('');
+  const [flowBridgeCopied, setFlowBridgeCopied] = useState(false);
+  const [flowBridgeSceneId, setFlowBridgeSceneId] = useState<string | null>(null);
 
-  // Set default media mode (stock or ai)
-  setMediaMode(channel.primaryType);
+  // Hunyuan Bridge — for video generation (KnowIt channel)
+  // Only becomes available AFTER image is uploaded
+  const [isHunyuanBridgeOpen, setIsHunyuanBridgeOpen] = useState(false);
+  const [hunyuanBridgePrompt, setHunyuanBridgePrompt] = useState('');
+  const [hunyuanBridgeCopied, setHunyuanBridgeCopied] = useState(false);
+  const [hunyuanImportUrl, setHunyuanImportUrl] = useState('');
 
-  // Apply pacing based on mode
-  if (channel.defaultMode === 'velocity') {
-    setProject(prev => ({
-      ...prev,
-      sceneDuration: 4
-    }));
-  } else {
-    setProject(prev => ({
-      ...prev,
-      sceneDuration: 6
-    }));
-  }
-
-}, [selectedChannelId]);
-const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
-  
   const [activeTab, setActiveTab] = useState<AppTab>('story');
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [isTimelineMinimized, setIsTimelineMinimized] = useState(false);
@@ -213,15 +158,10 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   const [ideaTopic, setIdeaTopic] = useState('');
   const [generatedIdeas, setGeneratedIdeas] = useState<string[]>([]);
   const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
-  
-  // 🔥 Persistent Ideas Per Channel
+
   const [savedIdeas, setSavedIdeas] = useState<Record<string, IdeaBatch[]>>({});
   const [ideasLoaded, setIdeasLoaded] = useState(false);
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
-  
-  const [isGrokStudioOpen, setIsGrokStudioOpen] = useState(false);
-  const [grokImportUrl, setGrokImportUrl] = useState('');
-  const [grokBridgeStatus, setGrokBridgeStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
 
   const [timelineHeight, setTimelineHeight] = useState(160);
   const [isResizingTimeline, setIsResizingTimeline] = useState(false);
@@ -233,77 +173,44 @@ const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderMessage, setRenderMessage] = useState('');
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
-    resolution: '1080p',
-    fps: 30,
-    format: 'mp4',
-    bitrate: 'high',
-    includeSubtitles: true
+    resolution: '1080p', fps: 30, format: 'mp4', bitrate: 'high', includeSubtitles: true
   });
 
   const [project, setProject] = useState<Project>({
     id: 'proj-' + Date.now(),
     title: 'Cinematic Visual Studio',
     channel: "default",
+    // ── channelId stored on project so promptBuilder can detect KnowIt ──
+    channelId: 'mindforged',
     scenes: [{
-  id: 'sc-1',
-
-  mediaType: 'ai',
-
-  aiPrompt: '',
-  startFramePrompt: '',
-  targetFramePrompt: '',
-  videoPrompt: '',
-
-  stockQuery: '',
-
-  startImageUrl: '',
-  targetImageUrl: '',
-  videoUrl: '',
-
-  frames: [],
-
-  status: 'empty',
-  duration: 5,
-  narrationDuration: 5
-}],
-extraTracks: [[], []],
+      id: 'sc-1', mediaType: 'ai', aiPrompt: '', startFramePrompt: '',
+      targetFramePrompt: '', videoPrompt: '', stockQuery: '',
+      startImageUrl: '', targetImageUrl: '', videoUrl: '',
+      frames: [], status: 'empty', duration: 5, narrationDuration: 5
+    }],
+    extraTracks: [[], []],
     backgroundMusicVibe: 'Playful, Educational, Upbeat',
-    narrationScript: '',
-    aspectRatio: '9:16',
-    resolution: '1080p',
-    sceneDuration: 5,
-    targetTotalDuration: 30,
-    globalContext: '',
-    visualStyle: PRESET_STYLES[0].value, 
-    narratorVoice: 'zachdfilms (Signature)',
+    narrationScript: '', aspectRatio: '9:16', resolution: '1080p',
+    sceneDuration: 5, targetTotalDuration: 30, globalContext: '',
+    visualStyle: PRESET_STYLES[0].value, narratorVoice: 'zachdfilms (Signature)',
     voiceSettings: { speed: 'normal', energy: 'high' },
     captionConfig: {
-      fontFamily: "'Montserrat', sans-serif",
-      fontSize: '48', 
-      color: '#ffffff',
-      backgroundColor: '#000000b3',
-      showBackground: true,
-      isUppercase: true,
-      showCaptions: true,
-      animationType: 'fade',
-      textEffect: 'shadow'
+      fontFamily: "'Montserrat', sans-serif", fontSize: '48',
+      color: '#ffffff', backgroundColor: '#000000b3', showBackground: true,
+      isUppercase: true, showCaptions: true, animationType: 'fade', textEffect: 'shadow'
     },
     audioConfig: {
-      musicVibe: 'Playful Upbeat',
-      musicVolume: 40,
-      sfxIntensity: 60,
-      duckingEnabled: true,
-      engagementSfx: true
+      musicVibe: 'Playful Upbeat', musicVolume: 40, sfxIntensity: 60,
+      duckingEnabled: true, engagementSfx: true
     }
   });
 
+  const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
   const [historyPast, setHistoryPast] = useState<Project[]>([]);
   const [historyFuture, setHistoryFuture] = useState<Project[]>([]);
   const projectRef = useRef<Project>(project);
 
-  useEffect(() => {
-    projectRef.current = project;
-  }, [project]);
+  useEffect(() => { projectRef.current = project; }, [project]);
 
   const saveToHistory = useCallback(() => {
     setHistoryPast(prev => {
@@ -317,18 +224,16 @@ extraTracks: [[], []],
   const handleUndo = useCallback(() => {
     if (historyPast.length === 0) return;
     const previous = historyPast[historyPast.length - 1];
-    const newPast = historyPast.slice(0, historyPast.length - 1);
     setHistoryFuture(prev => [projectRef.current, ...prev]);
-    setHistoryPast(newPast);
+    setHistoryPast(historyPast.slice(0, -1));
     setProject(previous);
   }, [historyPast]);
 
   const handleRedo = useCallback(() => {
     if (historyFuture.length === 0) return;
     const next = historyFuture[0];
-    const newFuture = historyFuture.slice(1);
     setHistoryPast(prev => [...prev, projectRef.current]);
-    setHistoryFuture(newFuture);
+    setHistoryFuture(historyFuture.slice(1));
     setProject(next);
   }, [historyFuture]);
 
@@ -336,34 +241,15 @@ extraTracks: [[], []],
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
-
   const activeScene = project.scenes.find(s => s.id === activeSceneId) || project.scenes[0];
-const clipDuration = activeScene.duration || project.sceneDuration
-const timelineMax = clipDuration * 1.5
-const clipPercent = (clipDuration / timelineMax) * 100
-  
+  const clipDuration = activeScene.duration || project.sceneDuration;
+  const timelineMax = clipDuration * 1.5;
+  const clipPercent = (clipDuration / timelineMax) * 100;
   const [frameIndex, setFrameIndex] = useState(0);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [timelineMode, setTimelineMode] = useState<'scene' | 'frame'>('scene');
 
-const [timelineMode, setTimelineMode] =
-useState<'scene' | 'frame'>('scene');
-  
-  useEffect(() => {
-
-  const handleFrameSelect = (e: any) => {
-    setFrameIndex(e.detail)
-  }
-
-  window.addEventListener("selectFrame", handleFrameSelect)
-
-  return () => {
-    window.removeEventListener("selectFrame", handleFrameSelect)
-  }
-
-}, [])
-
-const currentFrame =
-  activeScene.frames?.[frameIndex] || activeScene.frames?.[0];
+  const currentFrame = activeScene.frames?.[frameIndex] || activeScene.frames?.[0];
   const visualDuration = project.scenes.reduce((acc, s) => acc + (s.duration || project.sceneDuration), 0);
   const audioDuration = project.scenes.reduce((acc, s) => acc + (s.narrationDuration || s.duration || project.sceneDuration), 0);
   const maxExtraTrackLength = project.extraTracks.reduce((max, track) => {
@@ -372,47 +258,45 @@ const currentFrame =
   }, 0);
   const totalLength = Math.max(visualDuration, audioDuration, maxExtraTrackLength, 0.1);
 
+  // ── When channel changes, store channelId on project ──
   useEffect(() => {
+    const channel = CHANNELS.find(c => c.id === selectedChannelId);
+    if (!channel) return;
+    setVideoMode(channel.defaultMode);
+    setMediaMode(channel.primaryType);
+    setProject(prev => ({
+      ...prev,
+      channelId: selectedChannelId,
+      sceneDuration: channel.defaultMode === 'velocity' ? 4 : 6
+    }));
+  }, [selectedChannelId]);
 
-  if (!activeScene?.frames || activeScene.frames.length === 0) return;
-
-  // calculate scene start time
-  let accumulated = 0;
-  let sceneStart = 0;
-
-  for (const s of project.scenes) {
-
-    const dur = s.duration || project.sceneDuration;
-
-    if (s.id === activeScene.id) {
-      sceneStart = accumulated;
-      break;
+  useEffect(() => {
+    if (!activeScene?.frames || activeScene.frames.length === 0) return;
+    let accumulated = 0;
+    let sceneStart = 0;
+    for (const s of project.scenes) {
+      const dur = s.duration || project.sceneDuration;
+      if (s.id === activeScene.id) { sceneStart = accumulated; break; }
+      accumulated += dur;
     }
+    const sceneTime = currentTime - sceneStart;
+    const frameDuration = (activeScene.duration || project.sceneDuration) / activeScene.frames.length;
+    const index = Math.floor(sceneTime / frameDuration);
+    if (isPlayingSequence) setFrameIndex(Math.min(index, activeScene.frames.length - 1));
+  }, [currentTime, activeScene, project.scenes]);
 
-    accumulated += dur;
-  }
+  useEffect(() => {
+    const handleFrameSelect = (e: any) => { setFrameIndex(e.detail); };
+    window.addEventListener("selectFrame", handleFrameSelect);
+    return () => window.removeEventListener("selectFrame", handleFrameSelect);
+  }, []);
 
-  const sceneTime = currentTime - sceneStart;
-
-  const frameDuration =
-    (activeScene.duration || project.sceneDuration) /
-    activeScene.frames.length;
-
-  const index = Math.floor(sceneTime / frameDuration);
-
-  if (isPlayingSequence) {
-  setFrameIndex(Math.min(index, activeScene.frames.length - 1));
-  }
-    
-}, [currentTime, activeScene, project.scenes]);
-  
   const initAudioContext = () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-    if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
-    }
+    if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
     return audioContextRef.current;
   };
 
@@ -501,51 +385,26 @@ const currentFrame =
     }
   }, [project.scenes, project.sceneDuration, activeSceneId]);
 
-  
   useEffect(() => {
-  const stored = localStorage.getItem('channelIdeas');
-
-  if (!stored) {
+    const stored = localStorage.getItem('channelIdeas');
+    if (!stored) { setIdeasLoaded(true); return; }
+    try {
+      const parsed = JSON.parse(stored);
+      const isValid = Object.values(parsed).every((ch: any) =>
+        Array.isArray(ch) && ch.every((b: any) => b.batchId && b.createdAt && Array.isArray(b.ideas))
+      );
+      if (isValid) { setSavedIdeas(parsed); } else {
+        localStorage.removeItem('channelIdeas'); setSavedIdeas({});
+      }
+    } catch { localStorage.removeItem('channelIdeas'); setSavedIdeas({}); }
     setIdeasLoaded(true);
-    return;
-  }
+  }, []);
 
-  try {
-    const parsed = JSON.parse(stored);
-
-    // 🔥 Validate structure
-    const isValidStructure = Object.values(parsed).every(
-      (channel: any) =>
-        Array.isArray(channel) &&
-        channel.every(
-          (batch: any) =>
-            batch.batchId &&
-            batch.createdAt &&
-            Array.isArray(batch.ideas)
-        )
-    );
-
-    if (isValidStructure) {
-      setSavedIdeas(parsed);
-    } else {
-      console.warn("Old idea format detected. Resetting...");
-      localStorage.removeItem('channelIdeas');
-      setSavedIdeas({});
-    }
-  } catch (err) {
-    console.warn("Corrupted idea storage. Resetting...");
-    localStorage.removeItem('channelIdeas');
-    setSavedIdeas({});
-  }
-
-  setIdeasLoaded(true);
-}, []);
-      
   useEffect(() => {
-  if (Object.keys(savedIdeas).length === 0) return;
-  localStorage.setItem('channelIdeas', JSON.stringify(savedIdeas));
-}, [savedIdeas]);
-  
+    if (Object.keys(savedIdeas).length === 0) return;
+    localStorage.setItem('channelIdeas', JSON.stringify(savedIdeas));
+  }, [savedIdeas]);
+
   useEffect(() => {
     let frameId: number;
     let startTimestamp: number;
@@ -556,15 +415,9 @@ const currentFrame =
       const step = () => {
         const elapsed = (Date.now() - startTimestamp) / 1000;
         if (elapsed >= totalLength) {
-          setIsPlayingSequence(false);
-          stopAllAudio();
-          setCurrentTime(0);
-          updateActiveSceneFromTime(0);
-          return;
+          setIsPlayingSequence(false); stopAllAudio(); setCurrentTime(0); updateActiveSceneFromTime(0); return;
         }
-        setCurrentTime(elapsed);
-        updateActiveSceneFromTime(elapsed);
-        frameId = requestAnimationFrame(step);
+        setCurrentTime(elapsed); updateActiveSceneFromTime(elapsed); frameId = requestAnimationFrame(step);
       };
       frameId = requestAnimationFrame(step);
     } else { stopAllAudio(); }
@@ -573,85 +426,42 @@ const currentFrame =
 
   const handleSeek = (time: number) => {
     const newTime = Math.max(0, Math.min(totalLength, time));
-    setCurrentTime(newTime);
-    updateActiveSceneFromTime(newTime);
+    setCurrentTime(newTime); updateActiveSceneFromTime(newTime);
     if (isPlayingSequence) scheduleAudioPlayback(newTime);
   };
 
   const playRawPcm = async (url: string) => {
-    const ctx = initAudioContext();
-    stopAllAudio();
+    const ctx = initAudioContext(); stopAllAudio();
     try {
       const buffer = await getAudioBuffer(url);
       if (!buffer) return;
       const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start();
+      source.buffer = buffer; source.connect(ctx.destination); source.start();
       activeSourcesRef.current.add(source);
     } catch (err) {}
   };
 
   const updateScene = (id: string, updates: Partial<Scene>, saveHistory: boolean = false) => {
     if (saveHistory) saveToHistory();
-    setProject(prev => ({
-      ...prev,
-      scenes: prev.scenes.map(s => s.id === id ? { ...s, ...updates } : s)
-    }));
+    setProject(prev => ({ ...prev, scenes: prev.scenes.map(s => s.id === id ? { ...s, ...updates } : s) }));
   };
 
-  const handleSplitClip = (
-  sceneId: string,
-  clipIndex: number,
-  time: number
-) => {
-
-  saveToHistory()
-
-  setProject(prev => {
-
-    const scene = prev.scenes.find(s => s.id === sceneId)
-    if (!scene || !scene.clips) return prev
-
-    const clips = [...scene.clips]
-    const clip = clips[clipIndex]
-
-    if (!clip || !clip.frames || clip.frames.length < 2) return prev
-
-    // 🔥 Find split point based on frames
-    const splitFrameIndex = Math.floor(clip.frames.length / 2)
-
-    const firstFrames = clip.frames.slice(0, splitFrameIndex)
-    const secondFrames = clip.frames.slice(splitFrameIndex)
-
-    if (firstFrames.length === 0 || secondFrames.length === 0) return prev
-
-    const firstClip = {
-      ...clip,
-      id: crypto.randomUUID(),
-      frames: firstFrames
-    }
-
-    const secondClip = {
-      ...clip,
-      id: crypto.randomUUID(),
-      frames: secondFrames
-    }
-
-    clips.splice(clipIndex, 1, firstClip, secondClip)
-
-    return {
-      ...prev,
-      scenes: prev.scenes.map(s =>
-        s.id === sceneId
-          ? { ...s, clips }
-          : s
-      )
-    }
-
-  })
-
-  }
+  const handleSplitClip = (sceneId: string, clipIndex: number, time: number) => {
+    saveToHistory();
+    setProject(prev => {
+      const scene = prev.scenes.find(s => s.id === sceneId);
+      if (!scene || !scene.clips) return prev;
+      const clips = [...scene.clips];
+      const clip = clips[clipIndex];
+      if (!clip || !clip.frames || clip.frames.length < 2) return prev;
+      const splitFrameIndex = Math.floor(clip.frames.length / 2);
+      const firstFrames = clip.frames.slice(0, splitFrameIndex);
+      const secondFrames = clip.frames.slice(splitFrameIndex);
+      if (firstFrames.length === 0 || secondFrames.length === 0) return prev;
+      clips.splice(clipIndex, 1, { ...clip, id: crypto.randomUUID(), frames: firstFrames }, { ...clip, id: crypto.randomUUID(), frames: secondFrames });
+      return { ...prev, scenes: prev.scenes.map(s => s.id === sceneId ? { ...s, clips } : s) };
+    });
+  };
 
   const handleRemoveScene = (id: string) => {
     saveToHistory();
@@ -664,312 +474,214 @@ const currentFrame =
   };
 
   const handleGenerateIdeaList = async () => {
-
-  alert("CLICK WORKS");
-
-  setIsGeneratingIdeas(true);
-
-  try {
-
-  // 🔵 Collect previous ideas for this channel
-  const existingIdeas = (savedIdeas[selectedChannelId] || [])
-    .flatMap(batch => batch.ideas.map(i => i.title))
-    .slice(0, 50);
-
-  // 🔵 Generate new ideas
-  const ideas = await generateIdeaList(
-  ideaTopic,
-  selectedChannelId,
-  existingIdeas
-);
-
-  setGeneratedIdeas(ideas);
-
-  const newIdeas: ChannelIdea[] = ideas.map((idea) => ({
-    id: 'idea-' + Date.now() + '-' + Math.random(),
-    channel: selectedChannelId,
-    title: idea,
-    tag: ideaTopic,
-    suggestedMode: videoMode,
-    createdAt: Date.now()
-  }));
-
-    const newBatch = {
-  batchId: Date.now().toString(),
-  createdAt: new Date().toISOString(),
-  ideas: newIdeas
-};
-
-setSavedIdeas(prev => ({
-  ...prev,
-  [selectedChannelId]: [
-    newBatch,
-    ...(prev[selectedChannelId] || [])
-  ]
-}));
-
-  } catch (err) {
-    console.error("Idea generation failed", err);
-  } finally {
-    setIsGeneratingIdeas(false);
-  }
-};
+    setIsGeneratingIdeas(true);
+    try {
+      const existingIdeas = (savedIdeas[selectedChannelId] || []).flatMap(b => b.ideas.map((i: any) => i.title)).slice(0, 50);
+      const ideas = await generateIdeaList(ideaTopic, selectedChannelId, existingIdeas);
+      setGeneratedIdeas(ideas);
+      const newIdeas: ChannelIdea[] = ideas.map((idea) => ({
+        id: 'idea-' + Date.now() + '-' + Math.random(), channel: selectedChannelId,
+        title: idea, tag: ideaTopic, suggestedMode: videoMode, createdAt: Date.now()
+      }));
+      const newBatch = { batchId: Date.now().toString(), createdAt: new Date().toISOString(), ideas: newIdeas };
+      setSavedIdeas(prev => ({ ...prev, [selectedChannelId]: [newBatch, ...(prev[selectedChannelId] || [])] }));
+    } catch (err) { console.error("Idea generation failed", err); }
+    finally { setIsGeneratingIdeas(false); }
+  };
 
   const handleAutoStoryboard = async () => {
-  alert("handleAutoStoryboard started");
     if (!autoTopic) return;
     saveToHistory();
     setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
     try {
       const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
-   
-  const result = await buildStoryboard(
-  autoTopic,
-  selectedChannelId,
-  project.aspectRatio === '9:16',
-  numScenes
-);
-
-const entities = analyzeEntities(result);
-      
-      const channelPacing = {
-  mindforged: { first: 0.75, last: 1.25 },
-  cosmora: { first: 0.85, last: 1.3 },
-  veiltheory: { first: 0.9, last: 1.35 },
-  futurelife: { first: 0.85, last: 1.25 },
-  knowit: { first: 0.7, last: 1.1 }
-};
-
-const pacing = channelPacing[selectedChannelId as keyof typeof channelPacing] 
-  || { first: 0.8, last: 1.2 };
-      
-      const newScenes: Scene[] = result.scenes.map((s, idx) => {
-        const baseDuration = project.sceneDuration;
-let calculatedDuration = baseDuration;
-
-if (idx === 0) {
-  calculatedDuration = baseDuration * pacing.first;
-} else if (idx === result.scenes.length - 1) {
-  calculatedDuration = baseDuration * pacing.last;
-}
-        
-        return {
-        id: `sc-auto-${idx}-${Date.now()}`,
-          order: idx,
-        aiPrompt: s.aiPrompt,
-stockQuery: s.stockQuery,
-        narrationChunk: s.narration,
-        status: 'ready',
-          duration: calculatedDuration,
-  narrationDuration: calculatedDuration,
-        sfxPrompt: s.sfx
-};
-});
-      const mappedScenes = mapCharactersToScenes(
-  newScenes,
-  entities.characters
-)
-
-setProject(prev => ({ 
-  ...prev,
-  title: result.title,
-  globalContext: result.globalContext,
-  visualStyle: result.visualStyle,
-
-  characters: entities.characters,
-  environments: entities.environments,
-
-  scenes: mappedScenes
-}));
+      const result = await buildStoryboard(autoTopic, selectedChannelId, project.aspectRatio === '9:16', numScenes);
+      const entities = analyzeEntities(result);
+      const channelPacing: Record<string, { first: number; last: number }> = {
+        mindforged: { first: 0.75, last: 1.25 }, cosmora: { first: 0.85, last: 1.3 },
+        veiltheory: { first: 0.9, last: 1.35 }, futurelife: { first: 0.85, last: 1.25 },
+        knowit: { first: 0.7, last: 1.1 }
+      };
+      const pacing = channelPacing[selectedChannelId] || { first: 0.8, last: 1.2 };
+      const newScenes: Scene[] = result.scenes.map((s: any, idx: number) => ({
+        id: `sc-auto-${idx}-${Date.now()}`, order: idx, aiPrompt: s.aiPrompt,
+        narrationChunk: s.narration, status: 'ready',
+        duration: project.sceneDuration * (idx === 0 ? pacing.first : idx === result.scenes.length - 1 ? pacing.last : 1),
+        narrationDuration: project.sceneDuration, sfxPrompt: s.sfx
+      }));
+      const mappedScenes = mapCharactersToScenes(newScenes, entities.characters);
+      setProject(prev => ({
+        ...prev, title: result.title, globalContext: result.globalContext,
+        visualStyle: result.visualStyle, characters: entities.characters,
+        environments: entities.environments, scenes: mappedScenes,
+        channelId: selectedChannelId
+      }));
       setActiveSceneId(newScenes[0].id);
       setProjectStatus(ProjectStatus.IDLE);
-    } catch (err: any) { 
+    } catch (err: any) {
       console.error("Storyboard generation failed:", err);
-      alert("REAL ERROR: " + (err?.message || JSON.stringify(err)));
       setProjectStatus(ProjectStatus.ERROR);
       setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
     }
   };
-  
+
   const handleFutureLifeStoryStoryboard = async () => {
-  alert("Future Life Story started");
-
-  if (!autoTopic) return;
-
-  saveToHistory();
-  setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
-
-  try {
-    const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
-
-    const result = await buildFutureLifeStoryboard(
-      autoTopic,
-      project.aspectRatio === '9:16',
-      numScenes
-    );
-
-    const newScenes: Scene[] = result.scenes.map((s, idx): Scene => ({
-      id: `sc-future-${idx}-${Date.now()}`,
-      aiPrompt: s.prompt,
-      narrationChunk: s.narration,
-      status: 'ready',
-      duration: project.sceneDuration,
-      narrationDuration: project.sceneDuration,
-      sfxPrompt: s.sfx
-    }));
-
-    setProject(prev => ({
-      ...prev,
-      title: result.title,
-      globalContext: result.globalContext,
-      visualStyle: result.visualStyle,
-      scenes: newScenes
-    }));
-
-    setActiveSceneId(newScenes[0].id);
-    setProjectStatus(ProjectStatus.IDLE);
-
-  } catch (err: any) {
-    console.error("Future Life Story failed:", err);
-    alert("REAL ERROR: " + (err?.message || JSON.stringify(err)));
-    setProjectStatus(ProjectStatus.ERROR);
-    setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
-  }
-};
+    if (!autoTopic) return;
+    saveToHistory();
+    setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
+    try {
+      const numScenes = Math.max(1, Math.ceil(project.targetTotalDuration / project.sceneDuration));
+      const result = await buildFutureLifeStoryboard(autoTopic, project.aspectRatio === '9:16', numScenes);
+      const newScenes: Scene[] = result.scenes.map((s: any, idx: number): Scene => ({
+        id: `sc-future-${idx}-${Date.now()}`, aiPrompt: s.prompt, narrationChunk: s.narration,
+        status: 'ready', duration: project.sceneDuration, narrationDuration: project.sceneDuration, sfxPrompt: s.sfx
+      }));
+      setProject(prev => ({
+        ...prev, title: result.title, globalContext: result.globalContext,
+        visualStyle: result.visualStyle, scenes: newScenes, channelId: selectedChannelId
+      }));
+      setActiveSceneId(newScenes[0].id);
+      setProjectStatus(ProjectStatus.IDLE);
+    } catch (err: any) {
+      console.error("Future Life Story failed:", err);
+      setProjectStatus(ProjectStatus.ERROR);
+      setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
+    }
+  };
 
   const handleKnowItStoryboard = async () => {
-  alert("KnowIt started");
+    if (!autoTopic) return;
+    saveToHistory();
+    setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
+    try {
+      const result = await buildKnowItStoryboard(autoTopic, project.aspectRatio === '9:16', 5);
+      const newScenes: Scene[] = result.scenes.map((s: any, idx: number): Scene => ({
+        id: `sc-knowit-${idx}-${Date.now()}`, aiPrompt: s.prompt,
+        narrationChunk: s.narration, status: 'ready',
+        duration: project.sceneDuration, narrationDuration: project.sceneDuration,
+        sfxPrompt: s.sfx,
+        // ── store shotType hint from generateKnowIt for image prompt builder ──
+        shotTypeHint: s.shotType || 'type-a'
+      }));
+      setProject(prev => ({
+        ...prev, title: result.title, globalContext: result.globalContext,
+        visualStyle: result.visualStyle, scenes: newScenes,
+        // ── channelId stored so promptBuilder knows to use KnowIt3D system ──
+        channelId: 'knowit'
+      }));
+      setActiveSceneId(newScenes[0].id);
+      setProjectStatus(ProjectStatus.IDLE);
+    } catch (err: any) {
+      console.error("KnowIt failed:", err);
+      setProjectStatus(ProjectStatus.ERROR);
+      setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
+    }
+  };
 
-  if (!autoTopic) return;
-
-  saveToHistory();
-  setProjectStatus(ProjectStatus.GENERATING_STORYBOARD);
-
-  try {
-    const numScenes = Math.max(
-      1,
-      Math.ceil(project.targetTotalDuration / project.sceneDuration)
-    );
-
-    const result = await buildKnowItStoryboard(
-      autoTopic,
-      project.aspectRatio === '9:16',
-      numScenes
-    );
-
-    const newScenes: Scene[] = result.scenes.map((s, idx): Scene => ({
-      id: `sc-knowit-${idx}-${Date.now()}`,
-      aiPrompt: s.prompt,
-      narrationChunk: s.narration,
-      status: 'ready',
-      duration: project.sceneDuration,
-      narrationDuration: project.sceneDuration,
-      sfxPrompt: s.sfx
-    }));
-
-    setProject(prev => ({
-      ...prev,
-      title: result.title,
-      globalContext: result.globalContext,
-      visualStyle: result.visualStyle,
-      scenes: newScenes
-    }));
-
-    setActiveSceneId(newScenes[0].id);
-    setProjectStatus(ProjectStatus.IDLE);
-
-  } catch (err: any) {
-    console.error("KnowIt failed:", err);
-    alert("REAL ERROR: " + (err?.message || JSON.stringify(err)));
-    setProjectStatus(ProjectStatus.ERROR);
-    setTimeout(() => setProjectStatus(ProjectStatus.IDLE), 2000);
-  }
-};
+  // ═══════════════════════════════════════════════════════════
+  // HANDLE GENERATE IMAGE
+  //
+  // WHY THIS CHANGED:
+  // Old: called generateSceneImage(scene, project, mediaMode, imageProvider)
+  // which routed to Gemini, or threw "ImageFX bridge not implemented"
+  //
+  // New routing logic:
+  // KnowIt channel → Open Flow Bridge modal with our KnowIt3D prompt
+  // Other channels → Call generateImage(scene, project, shotType) directly via Gemini
+  //
+  // This means KnowIt never calls an API for images.
+  // The Flow Bridge handles it manually — prompt is auto-prepared,
+  // user opens Flow, pastes, generates, uploads back.
+  // ═══════════════════════════════════════════════════════════
 
   const handleGenerateImage = async (id: string) => {
+    const scene = project.scenes.find(s => s.id === id);
+    if (!scene) return;
 
-  const scene = project.scenes.find(s => s.id === id)
-  if (!scene) return
+    // ── KnowIt3D — use Flow Bridge ──
+    if (project.channelId === 'knowit') {
+      const shotType = (scene as any).shotTypeHint || 'type-a';
+      const { imagePrompt } = buildBridgePrompts(scene, project, shotType);
+      setFlowBridgePrompt(imagePrompt);
+      setFlowBridgeSceneId(id);
+      setFlowBridgeCopied(false);
+      setIsFlowBridgeOpen(true);
+      return;
+    }
 
-  setProjectStatus(ProjectStatus.GENERATING_IMAGE)
-
-  try {
-
-    const result = await generateSceneImage(
-      scene,
-      project,
-      mediaMode,
-      imageProvider
-    )
-
-    if (!result) return
-
-    updateScene(id, {
-  frames: result.frames,
-  clips: result.clips,
-  status: "ready"
-})
-
-    setProjectStatus(ProjectStatus.IDLE)
-
-  } catch (err: any) {
-
-    console.error("Image generation failed:", err)
-
-    alert(err?.message || "Image generation error")
-
-    setProjectStatus(ProjectStatus.ERROR)
-
-  }
-  }
-
-  const handleGenerateVideo = async (id: string) => {
-
-  const scene = project.scenes.find(sc => sc.id === id)
-  if (!scene) return
-
-  setProjectStatus(ProjectStatus.GENERATING_VIDEO)
-
-  try {
-
-    const result = await generateSceneVideo(
-      scene,
-      project,
-      generateVideo
-    )
-
-    if (!result) return
-
-    updateScene(id, {
-  frames: result.frames,
-  clips: result.clips,
-  status: "ready"
-})
-
-    setProjectStatus(ProjectStatus.IDLE)
-
-  } catch (err) {
-
-    console.error("Video generation failed:", err)
-
-    setProjectStatus(ProjectStatus.ERROR)
-
-  }
-}
-
-  const handleGrokBridgeGeneration = async () => {
-    if (!currentFrame?.imageUrl) return;
-    setGrokBridgeStatus('generating');
-    setProjectStatus(ProjectStatus.GROK_BRIDGE);
+    // ── All other channels — Gemini direct API ──
+    setProjectStatus(ProjectStatus.GENERATING_IMAGE);
     try {
-      const url = await generateVideo(
-  `Cinematic Studio Motion: ${activeScene.aiPrompt}`,
-  currentFrame.imageUrl, project.aspectRatio as any, `${project.visualStyle}, Cinema Grade`, project.globalContext, '1080p');
-      updateScene(activeSceneId, { videoUrl: url, status: 'ready' }, true);
-      setGrokBridgeStatus('ready');
-      setIsGrokStudioOpen(false);
+      const result = await generateSceneImage(scene, project, mediaMode, imageProvider);
+      if (!result) return;
+      updateScene(id, { frames: result.frames, clips: result.clips, status: 'ready' });
       setProjectStatus(ProjectStatus.IDLE);
-    } catch (err) { setGrokBridgeStatus('error'); setProjectStatus(ProjectStatus.ERROR); }
+    } catch (err: any) {
+      console.error("Image generation failed:", err);
+      alert(err?.message || "Image generation error");
+      setProjectStatus(ProjectStatus.ERROR);
+    }
+  };
+
+  // ── Flow Bridge: user uploads image back into the scene ──
+  const handleFlowImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !flowBridgeSceneId) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const frameId = 'frame-flow-' + Date.now();
+      updateScene(flowBridgeSceneId, {
+        frames: [{ id: frameId, imageUrl: dataUrl, options: [dataUrl] }],
+        status: 'ready'
+      }, true);
+      setIsFlowBridgeOpen(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Open Hunyuan Bridge for video (only available if image exists) ──
+  const handleOpenHunyuanBridge = () => {
+    const scene = project.scenes.find(s => s.id === activeSceneId);
+    if (!scene) return;
+    const shotType = (scene as any).shotTypeHint || 'type-a';
+    const { videoPrompt } = buildBridgePrompts(scene, project, shotType);
+    setHunyuanBridgePrompt(videoPrompt);
+    setHunyuanBridgeCopied(false);
+    setHunyuanImportUrl('');
+    setIsHunyuanBridgeOpen(true);
+  };
+
+  // ── Hunyuan Bridge: user pastes video URL or uploads file back ──
+  const handleHunyuanImport = () => {
+    if (!hunyuanImportUrl) return;
+    updateScene(activeSceneId, { videoUrl: hunyuanImportUrl, status: 'ready' }, true);
+    setIsHunyuanBridgeOpen(false);
+  };
+
+  const handleHunyuanVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    updateScene(activeSceneId, { videoUrl: url, status: 'ready' }, true);
+    setIsHunyuanBridgeOpen(false);
+  };
+
+  // ── Non-KnowIt video generation (kept for other channels) ──
+  const handleGenerateVideo = async (id: string) => {
+    const scene = project.scenes.find(sc => sc.id === id);
+    if (!scene) return;
+    setProjectStatus(ProjectStatus.GENERATING_VIDEO);
+    try {
+      // other channels still use their original video flow
+      const result = await generateSceneVideo(scene, project, async () => '');
+      if (!result) return;
+      updateScene(id, { frames: result.frames, clips: result.clips, status: 'ready' });
+      setProjectStatus(ProjectStatus.IDLE);
+    } catch (err) {
+      console.error("Video generation failed:", err);
+      setProjectStatus(ProjectStatus.ERROR);
+    }
   };
 
   const handleEnhancePromptAction = async () => {
@@ -991,59 +703,28 @@ setProject(prev => ({
   };
 
   const handleBakeNarration = async (id: string) => {
-  const s = project.scenes.find(sc => sc.id === id);
-  if (!s || !s.narrationChunk) return;
-
-  setProjectStatus(ProjectStatus.GENERATING_NARRATION);
-
-  try {
-    const voice = NARRATOR_VOICES.find(v => v.name === project.narratorVoice) || NARRATOR_VOICES[0];
-
-    const base64 = await generateNarration(
-  s.narrationChunk,
-  voice.value,
-  project.narrationScript,
-  project.voiceSettings.speed,
-  project.voiceSettings.energy
-);
-
-const audioUrl = `data:audio/pcm;base64,${base64}`;
-
-const ctx = new AudioContext();
-const rawBytes = decodeBase64(base64);
-
-// Gemini TTS = 24000 Hz, mono
-const audioBuffer = await decodeAudioData(
-  rawBytes,
-  ctx,
-  24000,
-  1
-);
-
-const duration = audioBuffer.duration;
-
-updateScene(id, {
-  narrationAudioUrl: audioUrl,
-  narrationDuration: duration,
-  duration: duration
-}, true);
-
-setProjectStatus(ProjectStatus.IDLE);
-    } catch (err) {
-    setProjectStatus(ProjectStatus.ERROR);
-  }
-};
+    const s = project.scenes.find(sc => sc.id === id);
+    if (!s || !s.narrationChunk) return;
+    setProjectStatus(ProjectStatus.GENERATING_NARRATION);
+    try {
+      const voice = NARRATOR_VOICES.find(v => v.name === project.narratorVoice) || NARRATOR_VOICES[0];
+      const base64 = await generateNarration(s.narrationChunk, voice.value, project.narrationScript, project.voiceSettings.speed, project.voiceSettings.energy);
+      const audioUrl = `data:audio/pcm;base64,${base64}`;
+      const ctx = new AudioContext();
+      const rawBytes = decodeBase64(base64);
+      const audioBuffer = await decodeAudioData(rawBytes, ctx, 24000, 1);
+      updateScene(id, { narrationAudioUrl: audioUrl, narrationDuration: audioBuffer.duration, duration: audioBuffer.duration }, true);
+      setProjectStatus(ProjectStatus.IDLE);
+    } catch (err) { setProjectStatus(ProjectStatus.ERROR); }
+  };
 
   const handlePreviewVoice = async (voiceName: string, voiceValue: string) => {
     setIsPreviewingVoice(voiceName);
     try {
       const base64 = await generateNarration("This is a sample of the " + voiceName + " voice model.", voiceValue, project.narrationScript, project.voiceSettings.speed, project.voiceSettings.energy);
       await playRawPcm(`data:audio/pcm;base64,${base64}`);
-    } catch (err) {
-      console.error("Voice preview failed:", err);
-    } finally {
-      setIsPreviewingVoice(null);
-    }
+    } catch (err) { console.error("Voice preview failed:", err); }
+    finally { setIsPreviewingVoice(null); }
   };
 
   const handleBakeMusicScore = async () => {
@@ -1051,20 +732,9 @@ setProjectStatus(ProjectStatus.IDLE);
     try {
       const base64 = await generateNarration("... ... background beat ... atmosphere ...", "Zephyr", `Rhythmic background for ${project.audioConfig.musicVibe}`);
       const url = `data:audio/pcm;base64,${base64}`;
-      const newClip: AudioClip = {
-        id: 'music-' + Date.now(),
-        content: `Score: ${project.audioConfig.musicVibe}`,
-        startTime: 0,
-        duration: totalLength,
-        type: 'music',
-        audioUrl: url
-      };
+      const newClip: AudioClip = { id: 'music-' + Date.now(), content: `Score: ${project.audioConfig.musicVibe}`, startTime: 0, duration: totalLength, type: 'music', audioUrl: url };
       saveToHistory();
-      setProject(prev => {
-        const newTracks = [...prev.extraTracks];
-        newTracks[0] = [newClip];
-        return { ...prev, extraTracks: newTracks };
-      });
+      setProject(prev => { const t = [...prev.extraTracks]; t[0] = [newClip]; return { ...prev, extraTracks: t }; });
       setProjectStatus(ProjectStatus.IDLE);
     } catch (err) { setProjectStatus(ProjectStatus.ERROR); }
   };
@@ -1075,72 +745,37 @@ setProjectStatus(ProjectStatus.IDLE);
     try {
       const base64 = await generateNarration(activeScene.sfxPrompt, "Fenrir", "High-quality foley SFX");
       const url = `data:audio/pcm;base64,${base64}`;
-      const newClip: AudioClip = {
-        id: 'sfx-' + Date.now(),
-        content: activeScene.sfxPrompt,
-        startTime: currentTime,
-        duration: 3,
-        type: 'sfx',
-        audioUrl: url
-      };
+      const newClip: AudioClip = { id: 'sfx-' + Date.now(), content: activeScene.sfxPrompt, startTime: currentTime, duration: 3, type: 'sfx', audioUrl: url };
       saveToHistory();
-      setProject(prev => {
-        const newTracks = [...prev.extraTracks];
-        newTracks[1] = [...newTracks[1], newClip];
-        return { ...prev, extraTracks: newTracks };
-      });
+      setProject(prev => { const t = [...prev.extraTracks]; t[1] = [...t[1], newClip]; return { ...prev, extraTracks: t }; });
       setProjectStatus(ProjectStatus.IDLE);
     } catch (err) { setProjectStatus(ProjectStatus.ERROR); }
   };
 
   const updateGlobalAudioClip = (trackIndex: number, clipId: string, updates: Partial<AudioClip>, finalize: boolean = false) => {
     if (finalize) saveToHistory();
-    setProject(prev => {
-      const newTracks = [...prev.extraTracks];
-      newTracks[trackIndex] = newTracks[trackIndex].map(c => c.id === clipId ? { ...c, ...updates } : c);
-      return { ...prev, extraTracks: newTracks };
-    });
+    setProject(prev => { const t = [...prev.extraTracks]; t[trackIndex] = t[trackIndex].map(c => c.id === clipId ? { ...c, ...updates } : c); return { ...prev, extraTracks: t }; });
   };
 
   const addGlobalAudioClip = (trackIndex: number, startTime: number) => {
     saveToHistory();
-    const newClip: AudioClip = {
-      id: 'clip-' + Date.now(),
-      content: trackIndex === 0 ? 'Score Layer' : 'FX Layer',
-      startTime,
-      duration: 5,
-      type: trackIndex === 0 ? 'music' : 'sfx'
-    };
-    setProject(prev => {
-      const newTracks = [...prev.extraTracks];
-      newTracks[trackIndex] = [...newTracks[trackIndex], newClip];
-      return { ...prev, extraTracks: newTracks };
-    });
+    const newClip: AudioClip = { id: 'clip-' + Date.now(), content: trackIndex === 0 ? 'Score Layer' : 'FX Layer', startTime, duration: 5, type: trackIndex === 0 ? 'music' : 'sfx' };
+    setProject(prev => { const t = [...prev.extraTracks]; t[trackIndex] = [...t[trackIndex], newClip]; return { ...prev, extraTracks: t }; });
   };
 
   const removeGlobalAudioClip = (trackIndex: number, clipId: string) => {
     saveToHistory();
-    setProject(prev => {
-      const newTracks = [...prev.extraTracks];
-      newTracks[trackIndex] = newTracks[trackIndex].filter(c => c.id !== clipId);
-      return { ...prev, extraTracks: newTracks };
-    });
+    setProject(prev => { const t = [...prev.extraTracks]; t[trackIndex] = t[trackIndex].filter(c => c.id !== clipId); return { ...prev, extraTracks: t }; });
   };
 
   const handleTabClick = (tab: AppTab) => {
-    if (activeTab === tab) {
-      setIsPanelCollapsed(!isPanelCollapsed);
-    } else {
-      setActiveTab(tab);
-      setIsPanelCollapsed(false);
-    }
+    if (activeTab === tab) { setIsPanelCollapsed(!isPanelCollapsed); }
+    else { setActiveTab(tab); setIsPanelCollapsed(false); }
   };
 
   const handleResizeTimelineStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizingTimeline(true);
-    dragStartYRef.current = e.clientY;
-    startHeightRef.current = timelineHeight;
+    e.preventDefault(); setIsResizingTimeline(true);
+    dragStartYRef.current = e.clientY; startHeightRef.current = timelineHeight;
     window.addEventListener('mousemove', handleResizeTimelineMove);
     window.addEventListener('mouseup', handleResizeTimelineEnd);
   };
@@ -1165,185 +800,99 @@ setProjectStatus(ProjectStatus.IDLE);
   };
 
   const handleStartRender = async () => {
-    setRenderingStatus(RenderingStatus.PROCESSING);
-    setRenderProgress(0);
+    setRenderingStatus(RenderingStatus.PROCESSING); setRenderProgress(0);
     const stages = ["Sequencing...", "Mixing...", "Exporting..."];
     for (let i = 0; i < stages.length; i++) {
       setRenderMessage(stages[i]);
-      for (let j = 0; j < 33; j++) {
-        setRenderProgress(p => Math.min(100, p + 1));
-        await new Promise(r => setTimeout(r, 30));
-      }
+      for (let j = 0; j < 33; j++) { setRenderProgress(p => Math.min(100, p + 1)); await new Promise(r => setTimeout(r, 30)); }
     }
-    setRenderingStatus(RenderingStatus.FINISHED);
-    setRenderMessage("Complete.");
+    setRenderingStatus(RenderingStatus.FINISHED); setRenderMessage("Complete.");
   };
 
   const updateCaptionConfig = (updates: Partial<CaptionConfig>) => {
-    saveToHistory();
-    setProject(prev => ({ ...prev, captionConfig: { ...prev.captionConfig, ...updates } }));
+    saveToHistory(); setProject(prev => ({ ...prev, captionConfig: { ...prev.captionConfig, ...updates } }));
   };
 
   const updateVoiceSettings = (updates: Partial<VoiceSettings>) => {
-    saveToHistory();
-    setProject(prev => ({ ...prev, voiceSettings: { ...prev.voiceSettings, ...updates } }));
+    saveToHistory(); setProject(prev => ({ ...prev, voiceSettings: { ...prev.voiceSettings, ...updates } }));
   };
 
+  const isKnowIt = project.channelId === 'knowit';
+  const hasImageForActiveScene = !!(currentFrame?.imageUrl);
+
   // ======================
-// CHANNEL DASHBOARD
-// ======================
-if (appMode === 'channels') {
-  return (
-    <div className="h-screen w-screen bg-[#050507] text-white flex flex-col items-center justify-center gap-6">
-      <h1 className="text-xl font-black uppercase tracking-widest">Select Channel</h1>
-
-      <div className="grid grid-cols-1 gap-4 w-80">
-        {CHANNELS.map(channel => (
-          <button
-  key={channel.id}
-  onClick={() => {
-    setSelectedChannelId(channel.id);
-    setVideoMode(channel.defaultMode);
-    setAppMode('ideas');
-  }}
-  className={`
-    p-5 rounded-2xl border transition-all text-left
-    ${channel.primaryType === 'ai'
-      ? 'bg-[#14141c] border-purple-500/30 hover:border-purple-400 hover:shadow-purple-500/20'
-      : 'bg-[#14141c] border-cyan-500/20 hover:border-cyan-400 hover:shadow-cyan-400/20'
-    }
-    hover:shadow-lg
-  `}
->
-  <div className="flex items-center gap-3 mb-2">
-    <div
-      className={`
-        w-8 h-8 rounded-lg flex items-center justify-center
-        ${channel.primaryType === 'ai'
-          ? 'bg-purple-500/20 text-purple-400'
-          : 'bg-cyan-500/20 text-cyan-400'
-        }
-      `}
-    >
-      <i className={`fas ${channel.icon} text-xs`} />
-    </div>
-
-    <div className="text-sm font-bold text-white">
-      {channel.name}
-    </div>
-  </div>
-
-  <div className="text-[11px] text-slate-400 uppercase tracking-wide">
-    {channel.category} — {channel.primaryType === 'ai' ? 'AI Channel' : 'Stock Channel'}
-  </div>
-</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ======================
-// IDEA SCREEN
-// ======================
-if (appMode === 'ideas') {
-
-  const channelIdeas = savedIdeas[selectedChannelId] || [];
-
-  return (
-    <div className="h-screen w-screen bg-[#050507] text-white flex flex-col p-8 gap-6">
-
-      <h1 className="text-xl font-black uppercase tracking-widest">
-        {CHANNELS.find(c => c.id === selectedChannelId)?.name}
-      </h1>
-
-      {/* Generate New Ideas */}
-      <div className="flex gap-4">
-        <input
-          value={ideaTopic}
-          onChange={(e) => setIdeaTopic(e.target.value)}
-          placeholder="Enter topic..."
-          className="flex-1 bg-[#14141c] border border-white/10 rounded-xl px-4 py-3 text-sm"
-        />
-
-        <button
-          onClick={handleGenerateIdeaList}
-          className="px-6 py-3 bg-cyan-500 text-black rounded-xl font-bold"
-        >
-          Generate
-        </button>
-      </div>
-
-      {/* Idea List */}
-      <div className="flex flex-col gap-3 mt-4">
-        {channelIdeas.length === 0 && (
-          <div className="text-slate-500 text-sm">
-            No ideas yet. Generate one above.
-          </div>
-        )}
-
-        {channelIdeas.map((batch) => {
-  const isOpen = expandedBatch === batch.batchId;
-
-  return (
-    <div
-      key={batch.batchId}
-      className="bg-[#14141c] border border-white/10 rounded-xl overflow-hidden"
-    >
-      {/* Batch Header */}
-      <button
-        onClick={() =>
-          setExpandedBatch(isOpen ? null : batch.batchId)
-        }
-        className="w-full p-4 text-left flex justify-between items-center hover:bg-white/5 transition-all"
-      >
-        <div>
-          <div className="font-bold text-sm">
-            Generated {batch.ideas.length} Ideas
-          </div>
-          <div className="text-xs text-slate-500">
-            {new Date(batch.createdAt).toLocaleString()}
-          </div>
-        </div>
-
-        <div className="text-xs">
-          {isOpen ? "▲" : "▼"}
-        </div>
-      </button>
-
-      {/* Expand Section */}
-      {isOpen && (
-        <div className="flex flex-col border-t border-white/10">
-          {batch.ideas.map((idea) => (
-            <button
-              key={idea.id}
-              onClick={() => {
-                setAutoTopic(idea.title);
-                setAppMode('editor');
-              }}
-              className="p-3 text-left hover:bg-cyan-500/10 text-sm"
+  // CHANNEL DASHBOARD
+  // ======================
+  if (appMode === 'channels') {
+    return (
+      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col items-center justify-center gap-6">
+        <h1 className="text-xl font-black uppercase tracking-widest">Select Channel</h1>
+        <div className="grid grid-cols-1 gap-4 w-80">
+          {CHANNELS.map(channel => (
+            <button key={channel.id}
+              onClick={() => { setSelectedChannelId(channel.id); setVideoMode(channel.defaultMode); setAppMode('ideas'); }}
+              className={`p-5 rounded-2xl border transition-all text-left ${channel.primaryType === 'ai' ? 'bg-[#14141c] border-purple-500/30 hover:border-purple-400 hover:shadow-purple-500/20' : 'bg-[#14141c] border-cyan-500/20 hover:border-cyan-400 hover:shadow-cyan-400/20'} hover:shadow-lg`}
             >
-              {idea.title}
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${channel.primaryType === 'ai' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                  <i className={`fas ${channel.icon} text-xs`} />
+                </div>
+                <div className="text-sm font-bold text-white">{channel.name}</div>
+              </div>
+              <div className="text-[11px] text-slate-400 uppercase tracking-wide">
+                {channel.category} — {channel.primaryType === 'ai' ? 'AI Channel' : 'Stock Channel'}
+              </div>
             </button>
           ))}
         </div>
-      )}
-    </div>
-  );
-})}
       </div>
+    );
+  }
 
-      <button
-        onClick={() => setAppMode('channels')}
-        className="text-slate-500 text-xs mt-6"
-      >
-        Back to Channels
-      </button>
+  // ======================
+  // IDEA SCREEN
+  // ======================
+  if (appMode === 'ideas') {
+    const channelIdeas = savedIdeas[selectedChannelId] || [];
+    return (
+      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col p-8 gap-6">
+        <h1 className="text-xl font-black uppercase tracking-widest">{CHANNELS.find(c => c.id === selectedChannelId)?.name}</h1>
+        <div className="flex gap-4">
+          <input value={ideaTopic} onChange={(e) => setIdeaTopic(e.target.value)} placeholder="Enter topic..." className="flex-1 bg-[#14141c] border border-white/10 rounded-xl px-4 py-3 text-sm" />
+          <button onClick={handleGenerateIdeaList} className="px-6 py-3 bg-cyan-500 text-black rounded-xl font-bold">Generate</button>
+        </div>
+        <div className="flex flex-col gap-3 mt-4">
+          {channelIdeas.length === 0 && <div className="text-slate-500 text-sm">No ideas yet. Generate one above.</div>}
+          {channelIdeas.map((batch) => {
+            const isOpen = expandedBatch === batch.batchId;
+            return (
+              <div key={batch.batchId} className="bg-[#14141c] border border-white/10 rounded-xl overflow-hidden">
+                <button onClick={() => setExpandedBatch(isOpen ? null : batch.batchId)} className="w-full p-4 text-left flex justify-between items-center hover:bg-white/5 transition-all">
+                  <div>
+                    <div className="font-bold text-sm">Generated {batch.ideas.length} Ideas</div>
+                    <div className="text-xs text-slate-500">{new Date(batch.createdAt).toLocaleString()}</div>
+                  </div>
+                  <div className="text-xs">{isOpen ? "▲" : "▼"}</div>
+                </button>
+                {isOpen && (
+                  <div className="flex flex-col border-t border-white/10">
+                    {batch.ideas.map((idea: any) => (
+                      <button key={idea.id} onClick={() => { setAutoTopic(idea.title); setAppMode('editor'); }} className="p-3 text-left hover:bg-cyan-500/10 text-sm">{idea.title}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={() => setAppMode('channels')} className="text-slate-500 text-xs mt-6">Back to Channels</button>
+      </div>
+    );
+  }
 
-    </div>
-  );
-}
-
+  // ======================
+  // MAIN EDITOR
+  // ======================
   return (
     <div className={`flex flex-col h-screen w-screen overflow-hidden bg-[#050507] text-[#f1f5f9] font-inter ${isResizingTimeline ? 'cursor-row-resize' : ''}`}>
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#0a0a0f] shrink-0 z-50 shadow-lg">
@@ -1354,242 +903,232 @@ if (appMode === 'ideas') {
         <button onClick={() => { setIsRenderModalOpen(true); setRenderingStatus(RenderingStatus.IDLE); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-[9px] font-black uppercase tracking-widest">Render</button>
       </header>
 
+      {/* RENDER MODAL — unchanged */}
       {isRenderModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
           <div className="w-full max-w-lg bg-[#0c0c12] border border-white/10 rounded-[2.5rem] p-10 shadow-2xl">
-             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-xl font-black uppercase tracking-widest">Master Studio Render</h2>
-                <button onClick={() => setIsRenderModalOpen(false)} className="text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
-             </div>
-             {renderingStatus === RenderingStatus.IDLE ? (
-                <div className="space-y-6">
-                   <div className="grid grid-cols-2 gap-4">
-                      {['720p', '1080p'].map(res => (
-                        <button key={res} onClick={() => setExportSettings({...exportSettings, resolution: res as any})} className={`p-4 rounded-2xl border text-[10px] font-black uppercase ${exportSettings.resolution === res ? 'bg-blue-600 border-blue-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>{res}</button>
-                      ))}
-                   </div>
-                   <button onClick={handleStartRender} className="w-full py-5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase">Start Export</button>
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-black uppercase tracking-widest">Master Studio Render</h2>
+              <button onClick={() => setIsRenderModalOpen(false)} className="text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
+            </div>
+            {renderingStatus === RenderingStatus.IDLE ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  {['720p', '1080p'].map(res => (
+                    <button key={res} onClick={() => setExportSettings({...exportSettings, resolution: res as any})} className={`p-4 rounded-2xl border text-[10px] font-black uppercase ${exportSettings.resolution === res ? 'bg-blue-600 border-blue-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>{res}</button>
+                  ))}
                 </div>
-             ) : (
-                <div className="space-y-8 flex flex-col items-center py-6">
-                   <div className="relative w-24 h-24">
-                      <svg className="w-full h-full transform -rotate-90">
-                         <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
-                         <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 * (1 - renderProgress / 100)} className="text-blue-500 transition-all duration-300" />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-black">{renderProgress}%</div>
-                   </div>
-                   <div className="text-center space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">{renderMessage}</p>
-                      {renderingStatus === RenderingStatus.FINISHED && (
-                        <button onClick={() => setIsRenderModalOpen(false)} className="mt-4 px-8 py-4 bg-white text-black rounded-xl text-[10px] font-black uppercase">Close</button>
-                      )}
-                   </div>
+                <button onClick={handleStartRender} className="w-full py-5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase">Start Export</button>
+              </div>
+            ) : (
+              <div className="space-y-8 flex flex-col items-center py-6">
+                <div className="relative w-24 h-24">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
+                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 * (1 - renderProgress / 100)} className="text-blue-500 transition-all duration-300" />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center text-xs font-black">{renderProgress}%</div>
                 </div>
-             )}
+                <div className="text-center space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">{renderMessage}</p>
+                  {renderingStatus === RenderingStatus.FINISHED && (
+                    <button onClick={() => setIsRenderModalOpen(false)} className="mt-4 px-8 py-4 bg-white text-black rounded-xl text-[10px] font-black uppercase">Close</button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {isGrokStudioOpen && (
+      {/* ═══════════════════════════════════════════════════
+          FLOW BRIDGE MODAL
+          WHY: KnowIt3D images are generated in Flow manually.
+          This modal shows the auto-built KnowIt3D image prompt,
+          lets user copy it, opens Flow in a new tab, then accepts
+          the downloaded image back via file upload.
+          ═══════════════════════════════════════════════════ */}
+      {isFlowBridgeOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
-           <div className="w-full max-w-2xl bg-[#0c0c12] border border-white/10 rounded-[2.5rem] p-12 shadow-2xl relative animate-in fade-in zoom-in duration-300">
-              <div className="flex justify-between items-center mb-8">
-                 <h2 className="text-2xl font-black uppercase tracking-widest">Grok Studio Bridge</h2>
-                 <button onClick={() => setIsGrokStudioOpen(false)} className="text-slate-500 hover:text-white transition-colors"><i className="fas fa-times text-xl"></i></button>
+          <div className="w-full max-w-2xl bg-[#0c0c12] border border-white/10 rounded-[2.5rem] p-10 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-widest">Flow Image Bridge</h2>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">Step 1 of 2 — Generate your image in Flow</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <div className="aspect-video rounded-2xl bg-black border border-white/5 overflow-hidden shadow-inner">
-                    {activeScene.imageUrl ? <img src={activeScene.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-800"><i className="fas fa-camera text-4xl"></i></div>}
-                 </div>
-                 <div className="space-y-6">
-                    <button onClick={handleGrokBridgeGeneration} disabled={grokBridgeStatus === 'generating' || !activeScene.imageUrl} className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-3 active:scale-95 disabled:opacity-20 transition-all shadow-lg shadow-blue-500/20">
-                       {grokBridgeStatus === 'generating' ? <i className="fas fa-circle-notch animate-spin"></i> : <i className="fas fa-bolt-lightning"></i>}
-                       Generate via Studio Bridge
-                    </button>
-                    <div className="border-t border-white/5 pt-6 space-y-3">
-                       <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Manual URL Import</label>
-                       <div className="flex gap-2">
-                          <input value={grokImportUrl} onChange={(e) => setGrokImportUrl(e.target.value)} placeholder="Paste MP4 link..." className="flex-1 bg-black border border-white/5 rounded-xl px-4 py-3 text-[10px] outline-none" />
-                          <button onClick={() => { if(grokImportUrl){ updateScene(activeSceneId, { videoUrl: grokImportUrl, status: 'ready' }, true); setIsGrokStudioOpen(false); setGrokImportUrl(''); } }} className="px-6 py-3 bg-white text-black rounded-xl text-[9px] font-black uppercase">Import</button>
-                       </div>
-                    </div>
-                 </div>
+              <button onClick={() => setIsFlowBridgeOpen(false)} className="text-slate-500 hover:text-white"><i className="fas fa-times text-lg"></i></button>
+            </div>
+
+            {/* Prompt display */}
+            <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-6 max-h-48 overflow-y-auto">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">KnowIt3D Image Prompt</p>
+              <p className="text-[11px] text-slate-300 leading-relaxed font-mono">{flowBridgePrompt}</p>
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(flowBridgePrompt);
+                  setFlowBridgeCopied(true);
+                  setTimeout(() => setFlowBridgeCopied(false), 3000);
+                }}
+                className={`py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${flowBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
+              >
+                {flowBridgeCopied ? '✓ Copied!' : '⎘ Copy Prompt'}
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(flowBridgePrompt);
+                  setFlowBridgeCopied(true);
+                  window.open('https://labs.google/fx/tools/image-fx', '_blank');
+                }}
+                className="py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase transition-all"
+              >
+                Open Flow ↗
+              </button>
+            </div>
+
+            {/* Upload return */}
+            <div className="border-t border-white/10 pt-6">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Step 2 — Upload generated image</p>
+              <label className="w-full py-5 bg-[#14141c] border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-cyan-400/50 transition-all">
+                <i className="fas fa-cloud-arrow-up text-2xl text-slate-500"></i>
+                <span className="text-[10px] font-black uppercase text-slate-500">Click to upload downloaded image</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFlowImageUpload} />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          HUNYUAN BRIDGE MODAL
+          WHY: KnowIt3D videos are generated in Hunyuan manually.
+          This modal shows the auto-built motion prompt,
+          opens aistudio.tencent.com, and accepts video back
+          via URL paste or file upload.
+          Locked until image exists for this scene.
+          ═══════════════════════════════════════════════════ */}
+      {isHunyuanBridgeOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
+          <div className="w-full max-w-2xl bg-[#0c0c12] border border-white/10 rounded-[2.5rem] p-10 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-widest">Hunyuan Video Bridge</h2>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">Step 1 of 2 — Generate video in Hunyuan</p>
               </div>
-           </div>
+              <button onClick={() => setIsHunyuanBridgeOpen(false)} className="text-slate-500 hover:text-white"><i className="fas fa-times text-lg"></i></button>
+            </div>
+
+            {/* Current image preview */}
+            {hasImageForActiveScene && (
+              <div className="mb-6 rounded-2xl overflow-hidden h-32 bg-black border border-white/10">
+                <img src={currentFrame?.imageUrl} className="w-full h-full object-cover" alt="Source frame" />
+              </div>
+            )}
+
+            {/* Prompt display */}
+            <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-6 max-h-40 overflow-y-auto">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Hunyuan Motion Prompt</p>
+              <p className="text-[11px] text-slate-300 leading-relaxed font-mono">{hunyuanBridgePrompt}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(hunyuanBridgePrompt);
+                  setHunyuanBridgeCopied(true);
+                  setTimeout(() => setHunyuanBridgeCopied(false), 3000);
+                }}
+                className={`py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${hunyuanBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
+              >
+                {hunyuanBridgeCopied ? '✓ Copied!' : '⎘ Copy Prompt'}
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(hunyuanBridgePrompt);
+                  setHunyuanBridgeCopied(true);
+                  window.open('https://aistudio.tencent.com/visual', '_blank');
+                }}
+                className="py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl text-[10px] font-black uppercase transition-all"
+              >
+                Open Hunyuan ↗
+              </button>
+            </div>
+
+            <div className="border-t border-white/10 pt-6 space-y-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Step 2 — Import generated video</p>
+              <div className="flex gap-2">
+                <input value={hunyuanImportUrl} onChange={(e) => setHunyuanImportUrl(e.target.value)} placeholder="Paste video URL..." className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px] outline-none focus:border-purple-500" />
+                <button onClick={handleHunyuanImport} disabled={!hunyuanImportUrl} className="px-6 py-3 bg-white text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-30">Import</button>
+              </div>
+              <label className="w-full py-4 bg-[#14141c] border border-dashed border-white/20 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-purple-400/50 transition-all">
+                <i className="fas fa-cloud-arrow-up text-xl text-slate-500"></i>
+                <span className="text-[10px] font-black uppercase text-slate-500">Or upload downloaded video file</span>
+                <input type="file" accept="video/*" className="hidden" onChange={handleHunyuanVideoUpload} />
+              </label>
+            </div>
+          </div>
         </div>
       )}
 
       <main className="flex-1 flex overflow-hidden relative">
+
+        {/* Frame editor mode — unchanged */}
         {timelineMode === 'frame' && (
-
-  <div className="absolute inset-0 bg-[#050507] z-[120] flex flex-col">
-
-    {/* HEADER */}
-    <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
-
-      <button
-        onClick={() => setTimelineMode('scene')}
-        className="text-sm text-white"
-      >
-        ← Back
-      </button>
-
-      <div className="text-xs uppercase tracking-widest text-slate-400">
-        Frame Editor
-      </div>
-
-      <button
-        onClick={() => setSnapEnabled(prev => !prev)}
-        className="text-xs text-cyan-400"
-      >
-        Snap
-      </button>
-
-    </div>
-
-    {/* FRAME EDITOR WORKSPACE */}
-    <div className="flex-1 flex flex-col p-6 gap-6">
-
-      {/* TIME RULER */}
-      <div className="w-full h-8 flex items-center text-xs text-slate-500">
-        Frame timeline (coming next)
-      </div>
-
-      {/* FRAME TIMELINE AREA */}
-
-<div className="w-full bg-[#111116] border border-white/10 rounded-lg p-4 flex flex-col gap-4">
-
-  {/* TIME RULER */}
-
-<div className="relative w-full h-6 text-[10px] text-slate-500">
-
-  {Array.from({
-    length: Math.ceil(activeScene.duration || project.sceneDuration) + 1
-  }).map((_, i) => (
-
-    <div
-      key={i}
-      className="absolute top-0"
-      style={{
-        left: `${(i / (activeScene.duration || project.sceneDuration)) * 100}%`
-      }}
-    >
-      {i}s
-    </div>
-
-  ))}
-
-</div>
-
-
-
-{/* FRAME TIMELINE */}
-
-<div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded overflow-hidden">
-
-  <div
-  className="absolute top-0 bottom-0 bg-red-500/20 border-l border-red-500 z-20"
-  style={{
-    left: `${clipPercent}%`,
-    right: 0
-  }}
-/>
-  
-  {activeScene.frames?.map((frame, index) => {
-    const frameWidth =
-      100 / (activeScene.frames?.length || 1)
-
-    const left =
-      frameWidth * index
-
-    return (
-
-      <div
-        key={frame.id}
-
-        onClick={() => setFrameIndex(index)}
-
-        className={`absolute top-0 h-full border cursor-pointer overflow-hidden relative ${
-          frameIndex === index
-            ? "border-cyan-400"
-            : "border-white/10"
-        }`}
-
-        style={{
-          left: `${left}%`,
-          width: `${frameWidth}%`
-        }}
-      >
-
-        {frame.imageUrl && (
-
-          <img
-            src={frame.imageUrl}
-            className="w-full h-full object-cover"
-          />
-
+          <div className="absolute inset-0 bg-[#050507] z-[120] flex flex-col">
+            <div className="h-14 flex items-center justify-between px-4 border-b border-white/10">
+              <button onClick={() => setTimelineMode('scene')} className="text-sm text-white">← Back</button>
+              <div className="text-xs uppercase tracking-widest text-slate-400">Frame Editor</div>
+              <button onClick={() => setSnapEnabled(prev => !prev)} className="text-xs text-cyan-400">Snap</button>
+            </div>
+            <div className="flex-1 flex flex-col p-6 gap-6">
+              <div className="w-full bg-[#111116] border border-white/10 rounded-lg p-4 flex flex-col gap-4">
+                <div className="relative w-full h-6 text-[10px] text-slate-500">
+                  {Array.from({ length: Math.ceil(activeScene.duration || project.sceneDuration) + 1 }).map((_, i) => (
+                    <div key={i} className="absolute top-0" style={{ left: `${(i / (activeScene.duration || project.sceneDuration)) * 100}%` }}>{i}s</div>
+                  ))}
+                </div>
+                <div className="relative w-full h-20 bg-[#0c0c12] border border-white/10 rounded overflow-hidden">
+                  <div className="absolute top-0 bottom-0 bg-red-500/20 border-l border-red-500 z-20" style={{ left: `${clipPercent}%`, right: 0 }} />
+                  {activeScene.frames?.map((frame, index) => {
+                    const frameWidth = 100 / (activeScene.frames?.length || 1);
+                    return (
+                      <div key={frame.id} onClick={() => setFrameIndex(index)} className={`absolute top-0 h-full border cursor-pointer overflow-hidden ${frameIndex === index ? "border-cyan-400" : "border-white/10"}`} style={{ left: `${frameWidth * index}%`, width: `${frameWidth}%` }}>
+                        {frame.imageUrl && <img src={frame.imageUrl} className="w-full h-full object-cover" />}
+                        <div className="absolute top-0 right-0 w-[6px] h-full bg-white/30 cursor-ew-resize"></div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {currentFrame?.options && currentFrame.options.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto">
+                    {currentFrame.options.map((img, idx) => (
+                      <img key={idx} src={img} onClick={() => updateScene(activeSceneId, { frames: activeScene.frames?.map(f => f.id === currentFrame.id ? { ...f, imageUrl: img } : f) })} className={`w-20 h-20 object-cover rounded cursor-pointer border ${currentFrame.imageUrl === img ? "border-cyan-400" : "border-white/10"}`} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
-        
-        <div className="absolute top-0 right-0 w-[6px] h-full bg-white/30 cursor-ew-resize"></div>
-      </div>
 
-    )
-
-  })}
-
-</div>
-
-  {/* IMAGE OPTIONS FOR SELECTED FRAME */}
-
-  {currentFrame?.options && currentFrame.options.length > 0 && (
-    <div className="flex gap-2 overflow-x-auto">
-
-      {currentFrame.options.map((img, idx) => (
-
-        <img
-          key={idx}
-          src={img}
-          onClick={() => {
-
-            updateScene(activeSceneId, {
-              frames: activeScene.frames?.map(f =>
-                f.id === currentFrame.id
-                  ? { ...f, imageUrl: img }
-                  : f
-              )
-            })
-
-          }}
-          className={`w-20 h-20 object-cover rounded cursor-pointer border ${
-            currentFrame.imageUrl === img
-              ? "border-cyan-400"
-              : "border-white/10"
-          }`}
-        />
-
-      ))}
-
-    </div>
-  )}
-
-</div>
-
-    </div>
-
-  </div>
-
-)}
-
+        {/* Sidebar tabs — unchanged */}
         <aside className="w-14 border-r border-white/5 bg-[#0a0a0f] flex flex-col shrink-0 z-40">
           <div className="flex-1 flex flex-col items-center py-6 gap-6 overflow-y-auto no-scrollbar">
             {(['story', 'style', 'visuals', 'text', 'voice', 'score', 'foley'] as AppTab[]).map((tab) => (
-              <button key={tab} onClick={() => handleTabClick(tab)} className={`p-2 rounded-lg transition-all ${activeTab === tab && !isPanelCollapsed ? 'bg-cyan-500 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}><i className={`fas fa-${tab === 'story' ? 'wand-magic-sparkles' : tab === 'style' ? 'palette' : tab === 'visuals' ? 'clapperboard' : tab === 'text' ? 'font' : tab === 'voice' ? 'microphone-lines' : tab === 'score' ? 'music' : 'bolt-lightning'} text-xs`}></i></button>
+              <button key={tab} onClick={() => handleTabClick(tab)} className={`p-2 rounded-lg transition-all ${activeTab === tab && !isPanelCollapsed ? 'bg-cyan-500 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                <i className={`fas fa-${tab === 'story' ? 'wand-magic-sparkles' : tab === 'style' ? 'palette' : tab === 'visuals' ? 'clapperboard' : tab === 'text' ? 'font' : tab === 'voice' ? 'microphone-lines' : tab === 'score' ? 'music' : 'bolt-lightning'} text-xs`}></i>
+              </button>
             ))}
           </div>
-          <button onClick={() => setIsPanelCollapsed(!isPanelCollapsed)} className="pb-4 text-slate-800 hover:text-white transition-colors"><i className={`fas fa-chevron-${isPanelCollapsed ? 'right' : 'left'} text-[10px]`}></i></button>
+          <button onClick={() => setIsPanelCollapsed(!isPanelCollapsed)} className="pb-4 text-slate-800 hover:text-white transition-colors">
+            <i className={`fas fa-chevron-${isPanelCollapsed ? 'right' : 'left'} text-[10px]`}></i>
+          </button>
         </aside>
 
+        {/* Panel */}
         <div className={`absolute top-0 bottom-0 left-14 h-full transition-all duration-300 border-r border-white/5 bg-[#0c0c12]/95 backdrop-blur-2xl flex flex-col overflow-hidden z-[60] shadow-2xl ${isPanelCollapsed ? 'w-0 opacity-0' : 'w-72 opacity-100'}`}>
           <div className="p-5 flex flex-col h-full gap-6 overflow-y-auto custom-scroll min-w-[18rem]">
 
@@ -1597,15 +1136,19 @@ if (appMode === 'ideas') {
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-cyan-400">Story Architect</h3>
                 <textarea value={autoTopic} onChange={(e) => setAutoTopic(e.target.value)} className="w-full h-32 bg-[#14141c] border border-white/5 rounded-xl p-4 text-xs outline-none resize-none" placeholder="Enter video topic..." />
-                <button onClick={handleAutoStoryboard} disabled={projectStatus === ProjectStatus.GENERATING_STORYBOARD} className="w-full py-4 bg-cyan-500 text-black rounded-xl text-[10px] font-black uppercase">{projectStatus === ProjectStatus.GENERATING_STORYBOARD ? 'Building...' : 'Synthesize Script'}</button>
-                
+                <button onClick={handleAutoStoryboard} disabled={projectStatus === ProjectStatus.GENERATING_STORYBOARD} className="w-full py-4 bg-cyan-500 text-black rounded-xl text-[10px] font-black uppercase">
+                  {projectStatus === ProjectStatus.GENERATING_STORYBOARD ? 'Building...' : 'Synthesize Script'}
+                </button>
               </div>
             )}
+
             {activeTab === 'style' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-cyan-400">Visual Aesthetic</h3>
                 <textarea value={project.visualStyle} onChange={(e) => setProject({...project, visualStyle: e.target.value})} className="w-full h-32 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[10px] outline-none resize-none" />
-                <button onClick={handleBrainstormStyle} disabled={isBrainstormingStyle} className="w-full py-3 bg-white/5 text-[9px] font-black uppercase rounded-xl border border-white/10">{isBrainstormingStyle ? 'Thinking...' : 'AI Brainstorm'}</button>
+                <button onClick={handleBrainstormStyle} disabled={isBrainstormingStyle} className="w-full py-3 bg-white/5 text-[9px] font-black uppercase rounded-xl border border-white/10">
+                  {isBrainstormingStyle ? 'Thinking...' : 'AI Brainstorm'}
+                </button>
                 <div className="grid grid-cols-2 gap-2">
                   {PRESET_STYLES.map(s => (
                     <button key={s.name} onClick={() => setProject({...project, visualStyle: s.value})} className="p-3 bg-[#14141c] border border-white/5 rounded-xl text-[8px] font-black uppercase hover:bg-cyan-500/10 text-center transition-all">{s.name}</button>
@@ -1613,424 +1156,339 @@ if (appMode === 'ideas') {
                 </div>
               </div>
             )}
+
             {activeTab === 'visuals' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-cyan-400">Scene Directing</h3>
+
+                {/* Prompt textarea */}
                 <textarea
-  value={
-    mediaMode === 'stock'
-      ? activeScene.stockQuery
-      : activeScene.aiPrompt
-  }
-  onChange={(e) =>
-    updateScene(
-      activeSceneId,
-      mediaMode === 'stock'
-        ? { stockQuery: e.target.value }
-        : { aiPrompt: e.target.value }
-    )
-  }
-  className="w-full h-32 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[10px] outline-none resize-none"
-/>
-                <button onClick={handleEnhancePromptAction} disabled={isEnhancingPrompt} className="w-full py-3 bg-white/5 text-[9px] font-black uppercase rounded-xl border border-white/10">{isEnhancingPrompt ? 'Enhancing...' : 'Enhance Directive'}</button>
-                <div className="space-y-3">
-  <div className="flex gap-2">
-    <button
-      onClick={() => setMediaMode('ai')}
-      className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${
-        mediaMode === 'ai'
-          ? 'bg-cyan-500 text-black border-cyan-500'
-          : 'bg-[#14141c] border-white/5 text-slate-500'
-      }`}
-    >
-      AI Mode
-    </button>
+                  value={activeScene.aiPrompt || ''}
+                  onChange={(e) => updateScene(activeSceneId, { aiPrompt: e.target.value })}
+                  className="w-full h-32 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[10px] outline-none resize-none"
+                  placeholder={isKnowIt ? "Scene narration — auto-detected from storyboard..." : "Scene description..."}
+                />
 
-    <button
-      onClick={() => setMediaMode('stock')}
-      className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${
-        mediaMode === 'stock'
-          ? 'bg-amber-500 text-black border-amber-500'
-          : 'bg-[#14141c] border-white/5 text-slate-500'
-      }`}
-    >
-      Stock Mode
-    </button>
-  </div>
+                <button onClick={handleEnhancePromptAction} disabled={isEnhancingPrompt} className="w-full py-3 bg-white/5 text-[9px] font-black uppercase rounded-xl border border-white/10">
+                  {isEnhancingPrompt ? 'Enhancing...' : 'Enhance Directive'}
+                </button>
 
-                  {mediaMode === 'ai' && (
-  <div className="grid grid-cols-3 gap-2">
+                {/* ═══════════════════════════════════════════
+                    VISUALS TAB — KnowIt3D vs Other Channels
+                    
+                    WHY DIFFERENT UI FOR KNOWIT:
+                    - No Stock Mode (KnowIt is AI only)
+                    - No Gemini/Flow/Wix picker (bridge handles it)
+                    - "Generate Frame" opens Flow Bridge modal
+                    - "Generate Video" opens Hunyuan Bridge modal
+                      (locked until image exists)
+                    
+                    OTHER CHANNELS:
+                    - Keep Stock Mode / AI Mode toggle
+                    - Keep Gemini image provider
+                    - Keep original video flow
+                    ═══════════════════════════════════════════ */}
 
-    <button
-      onClick={() => setImageProvider('gemini')}
-      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
-        imageProvider === 'gemini'
-          ? 'bg-purple-500 text-black border-purple-500'
-          : 'bg-[#14141c] border-white/5 text-slate-500'
-      }`}
-    >
-      Gemini
-    </button>
+                {isKnowIt ? (
+                  // ── KnowIt3D: Bridge UI ──
+                  <div className="space-y-3">
+                    {/* Channel badge */}
+                    <div className="px-3 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl text-[9px] font-black uppercase text-purple-400 text-center tracking-widest">
+                      KnowIt3D — Bridge Mode
+                    </div>
 
-    <button
-      onClick={() => setImageProvider('flow')}
-      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
-        imageProvider === 'flow'
-          ? 'bg-blue-500 text-black border-blue-500'
-          : 'bg-[#14141c] border-white/5 text-slate-500'
-      }`}
-    >
-      Flow
-    </button>
+                    {/* Flow Bridge button — always available */}
+                    <button
+                      onClick={() => handleGenerateImage(activeSceneId)}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                    >
+                      <i className="fas fa-image"></i>
+                      Generate Frame via Flow
+                    </button>
 
-    <button
-      onClick={() => setImageProvider('wix')}
-      className={`py-2 rounded-lg text-[8px] font-black uppercase border ${
-        imageProvider === 'wix'
-          ? 'bg-pink-500 text-black border-pink-500'
-          : 'bg-[#14141c] border-white/5 text-slate-500'
-      }`}
-    >
-      Wix
-    </button>
+                    {/* Hunyuan Bridge button — locked until image exists */}
+                    <button
+                      onClick={handleOpenHunyuanBridge}
+                      disabled={!hasImageForActiveScene}
+                      className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[9px] font-black uppercase transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <i className="fas fa-video"></i>
+                      {hasImageForActiveScene ? 'Generate Video via Hunyuan' : 'Generate Image First'}
+                    </button>
 
-  </div>
-)}
-
-  <button
-    onClick={() => handleGenerateImage(activeSceneId)}
-    className="w-full py-4 bg-white text-black rounded-xl text-[9px] font-black uppercase transition-all shadow-lg"
-  >
-    {mediaMode === 'ai' ? 'Generate AI Frame' : 'Load Stock Frame'}
-  </button>
-</div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleGenerateVideo(activeSceneId)} disabled={!activeScene.imageUrl} className="py-4 bg-cyan-500 text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-20 shadow-lg shadow-cyan-400/10">Veo Motion</button>
-                  <button onClick={() => setIsGrokStudioOpen(true)} disabled={!activeScene.imageUrl} className="py-4 bg-black text-white rounded-xl text-[9px] font-black uppercase border border-white/10 hover:bg-slate-900 disabled:opacity-20">Grok Imagine</button>
-                </div>
+                    {/* Status hint */}
+                    {!hasImageForActiveScene && (
+                      <p className="text-[8px] text-slate-600 text-center uppercase tracking-widest">
+                        Upload an image to unlock video generation
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  // ── Other Channels: Original UI ──
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <button onClick={() => setMediaMode('ai')} className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${mediaMode === 'ai' ? 'bg-cyan-500 text-black border-cyan-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>AI Mode</button>
+                      <button onClick={() => setMediaMode('stock')} className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border ${mediaMode === 'stock' ? 'bg-amber-500 text-black border-amber-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>Stock Mode</button>
+                    </div>
+                    {mediaMode === 'ai' && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['gemini', 'flow', 'wix'] as const).map(p => (
+                          <button key={p} onClick={() => setImageProvider(p)} className={`py-2 rounded-lg text-[8px] font-black uppercase border ${imageProvider === p ? 'bg-purple-500 text-black border-purple-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>{p}</button>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={() => handleGenerateImage(activeSceneId)} className="w-full py-4 bg-white text-black rounded-xl text-[9px] font-black uppercase transition-all shadow-lg">
+                      {mediaMode === 'ai' ? 'Generate AI Frame' : 'Load Stock Frame'}
+                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => handleGenerateVideo(activeSceneId)} disabled={!currentFrame?.imageUrl} className="py-4 bg-cyan-500 text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-20 shadow-lg shadow-cyan-400/10">Generate Video</button>
+                      <button disabled className="py-4 bg-black text-slate-600 rounded-xl text-[9px] font-black uppercase border border-white/5 cursor-not-allowed">Coming Soon</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
             {activeTab === 'text' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-amber-500">Typography Suite</h3>
                 <div className="space-y-3">
-                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Text</label>
-                    <textarea value={activeScene.narrationChunk || ''} onChange={(e) => updateScene(activeSceneId, {narrationChunk: e.target.value})} className="w-full h-24 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[11px] outline-none" />
+                  <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Text</label>
+                  <textarea value={activeScene.narrationChunk || ''} onChange={(e) => updateScene(activeSceneId, {narrationChunk: e.target.value})} className="w-full h-24 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[11px] outline-none" />
                 </div>
-                
                 <div className="space-y-4 pt-4 border-t border-white/5">
-                   <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => updateCaptionConfig({showCaptions: !project.captionConfig.showCaptions})} className={`py-3 rounded-xl text-[8px] font-black uppercase border ${project.captionConfig.showCaptions ? 'bg-amber-500 text-black' : 'bg-[#14141c] text-slate-500'}`}>Show Text</button>
-                      <button onClick={() => updateCaptionConfig({isUppercase: !project.captionConfig.isUppercase})} className={`py-3 rounded-xl text-[8px] font-black uppercase border ${project.captionConfig.isUppercase ? 'bg-amber-500 text-black' : 'bg-[#14141c] text-slate-500'}`}>Uppercase</button>
-                   </div>
-
-                   <div className="space-y-2">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Font Family</label>
-                      <select value={project.captionConfig.fontFamily} onChange={(e) => updateCaptionConfig({fontFamily: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
-                         {AVAILABLE_FONTS.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
-                      </select>
-                   </div>
-
-                   <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                         <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Font Size</label>
-                         <span className="text-[8px] font-black text-amber-500">{project.captionConfig.fontSize}px</span>
-                      </div>
-                      <input type="range" min="3" max="120" value={parseInt(project.captionConfig.fontSize)} onChange={(e) => updateCaptionConfig({fontSize: e.target.value})} className="w-full h-1 bg-white/10 appearance-none accent-amber-500 rounded-full" />
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                         <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Text Color</label>
-                         <input type="color" value={project.captionConfig.color} onChange={(e) => updateCaptionConfig({color: e.target.value})} className="w-full h-10 bg-[#14141c] border border-white/5 rounded-xl outline-none cursor-pointer" />
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">BG Color</label>
-                         <input type="color" value={project.captionConfig.backgroundColor.slice(0, 7)} onChange={(e) => updateCaptionConfig({backgroundColor: e.target.value + 'b3'})} className="w-full h-10 bg-[#14141c] border border-white/5 rounded-xl outline-none cursor-pointer" />
-                      </div>
-                   </div>
-
-                   <div className="space-y-2">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Entrance Animation</label>
-                      <select value={project.captionConfig.animationType} onChange={(e) => updateCaptionConfig({animationType: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
-                         {ENTRANCE_ANIMATIONS.map(a => <option key={a.value} value={a.value}>{a.name}</option>)}
-                      </select>
-                   </div>
-
-                   <div className="space-y-2">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Text Effect</label>
-                      <select value={project.captionConfig.textEffect} onChange={(e) => updateCaptionConfig({textEffect: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
-                         {TEXT_EFFECTS.map(eff => <option key={eff.value} value={eff.value}>{eff.name}</option>)}
-                      </select>
-                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => updateCaptionConfig({showCaptions: !project.captionConfig.showCaptions})} className={`py-3 rounded-xl text-[8px] font-black uppercase border ${project.captionConfig.showCaptions ? 'bg-amber-500 text-black' : 'bg-[#14141c] text-slate-500'}`}>Show Text</button>
+                    <button onClick={() => updateCaptionConfig({isUppercase: !project.captionConfig.isUppercase})} className={`py-3 rounded-xl text-[8px] font-black uppercase border ${project.captionConfig.isUppercase ? 'bg-amber-500 text-black' : 'bg-[#14141c] text-slate-500'}`}>Uppercase</button>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Font Family</label>
+                    <select value={project.captionConfig.fontFamily} onChange={(e) => updateCaptionConfig({fontFamily: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
+                      {AVAILABLE_FONTS.map(f => <option key={f.value} value={f.value}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Font Size</label>
+                      <span className="text-[8px] font-black text-amber-500">{project.captionConfig.fontSize}px</span>
+                    </div>
+                    <input type="range" min="3" max="120" value={parseInt(project.captionConfig.fontSize)} onChange={(e) => updateCaptionConfig({fontSize: e.target.value})} className="w-full h-1 bg-white/10 appearance-none accent-amber-500 rounded-full" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Text Color</label>
+                      <input type="color" value={project.captionConfig.color} onChange={(e) => updateCaptionConfig({color: e.target.value})} className="w-full h-10 bg-[#14141c] border border-white/5 rounded-xl outline-none cursor-pointer" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">BG Color</label>
+                      <input type="color" value={project.captionConfig.backgroundColor.slice(0, 7)} onChange={(e) => updateCaptionConfig({backgroundColor: e.target.value + 'b3'})} className="w-full h-10 bg-[#14141c] border border-white/5 rounded-xl outline-none cursor-pointer" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Entrance Animation</label>
+                    <select value={project.captionConfig.animationType} onChange={(e) => updateCaptionConfig({animationType: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
+                      {ENTRANCE_ANIMATIONS.map(a => <option key={a.value} value={a.value}>{a.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Text Effect</label>
+                    <select value={project.captionConfig.textEffect} onChange={(e) => updateCaptionConfig({textEffect: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none">
+                      {TEXT_EFFECTS.map(eff => <option key={eff.value} value={eff.value}>{eff.name}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
+
             {activeTab === 'voice' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Narrator Engine</h3>
                 <div className="space-y-3">
                   {NARRATOR_VOICES.map(v => (
                     <div key={v.name} className="flex gap-2">
-                      <button 
-                        onClick={() => setProject({...project, narratorVoice: v.name})} 
-                        className={`flex-1 p-4 rounded-xl text-[9px] font-black uppercase text-left border transition-all ${project.narratorVoice === v.name ? 'bg-amber-500 text-black border-amber-500 shadow-md' : 'bg-[#14141c] border-white/5 text-slate-500 hover:border-white/10'}`}
-                      >
+                      <button onClick={() => setProject({...project, narratorVoice: v.name})} className={`flex-1 p-4 rounded-xl text-[9px] font-black uppercase text-left border transition-all ${project.narratorVoice === v.name ? 'bg-amber-500 text-black border-amber-500 shadow-md' : 'bg-[#14141c] border-white/5 text-slate-500 hover:border-white/10'}`}>
                         <div>{v.name}</div>
                         <div className="text-[7px] opacity-60 font-medium">{v.desc}</div>
                       </button>
-                      <button 
-                        onClick={() => handlePreviewVoice(v.name, v.value)} 
-                        disabled={isPreviewingVoice !== null}
-                        className={`w-12 rounded-xl border border-white/5 bg-[#14141c] flex items-center justify-center text-slate-500 hover:text-white transition-all ${isPreviewingVoice === v.name ? 'animate-pulse text-amber-500 border-amber-500/50' : ''}`}
-                      >
+                      <button onClick={() => handlePreviewVoice(v.name, v.value)} disabled={isPreviewingVoice !== null} className={`w-12 rounded-xl border border-white/5 bg-[#14141c] flex items-center justify-center text-slate-500 hover:text-white transition-all ${isPreviewingVoice === v.name ? 'animate-pulse text-amber-500 border-amber-500/50' : ''}`}>
                         {isPreviewingVoice === v.name ? <i className="fas fa-circle-notch animate-spin"></i> : <i className="fas fa-play"></i>}
                       </button>
                     </div>
                   ))}
                 </div>
-
                 <div className="space-y-4 pt-4 border-t border-white/5">
-                   <div className="space-y-3">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Narrator Speed</label>
-                      <div className="grid grid-cols-3 gap-2">
-                         {(['slow', 'normal', 'fast'] as const).map(s => (
-                           <button 
-                             key={s} 
-                             onClick={() => updateVoiceSettings({speed: s})} 
-                             className={`py-2 rounded-lg text-[8px] font-black uppercase border transition-all ${project.voiceSettings.speed === s ? 'bg-amber-500 text-black border-amber-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}
-                           >
-                             {s}
-                           </button>
-                         ))}
-                      </div>
-                   </div>
-
-                   <div className="space-y-3">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Energy Level</label>
-                      <div className="grid grid-cols-3 gap-2">
-                         {(['low', 'normal', 'high'] as const).map(e => (
-                           <button 
-                             key={e} 
-                             onClick={() => updateVoiceSettings({energy: e})} 
-                             className={`py-2 rounded-lg text-[8px] font-black uppercase border transition-all ${project.voiceSettings.energy === e ? 'bg-amber-500 text-black border-amber-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}
-                           >
-                             {e}
-                           </button>
-                         ))}
-                      </div>
-                   </div>
-
-                   <div className="space-y-3">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Delivery Tone</label>
-                      <select 
-                        value={project.narrationScript} 
-                        onChange={(e) => setProject({...project, narrationScript: e.target.value})} 
-                        className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none focus:border-amber-500"
-                      >
-                         {VOICE_TONES.map(t => <option key={t.value} value={t.value}>{t.name}</option>)}
-                      </select>
-                   </div>
+                  <div className="space-y-3">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Narrator Speed</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['slow', 'normal', 'fast'] as const).map(s => (
+                        <button key={s} onClick={() => updateVoiceSettings({speed: s})} className={`py-2 rounded-lg text-[8px] font-black uppercase border transition-all ${project.voiceSettings.speed === s ? 'bg-amber-500 text-black border-amber-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Energy Level</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['low', 'normal', 'high'] as const).map(e => (
+                        <button key={e} onClick={() => updateVoiceSettings({energy: e})} className={`py-2 rounded-lg text-[8px] font-black uppercase border transition-all ${project.voiceSettings.energy === e ? 'bg-amber-500 text-black border-amber-500' : 'bg-[#14141c] border-white/5 text-slate-500'}`}>{e}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Delivery Tone</label>
+                    <select value={project.narrationScript} onChange={(e) => setProject({...project, narrationScript: e.target.value})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-3 text-[10px] outline-none focus:border-amber-500">
+                      {VOICE_TONES.map(t => <option key={t.value} value={t.value}>{t.name}</option>)}
+                    </select>
+                  </div>
                 </div>
-
                 <button onClick={() => handleBakeNarration(activeSceneId)} className="w-full py-4 bg-amber-500 text-black rounded-xl text-[10px] font-black uppercase shadow-lg shadow-amber-500/20 transition-all active:scale-95">Synthesize Script</button>
               </div>
             )}
+
             {activeTab === 'score' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-blue-400 tracking-widest">Music Bed</h3>
                 <input value={project.audioConfig.musicVibe} onChange={(e) => setProject({...project, audioConfig: {...project.audioConfig, musicVibe: e.target.value}})} className="w-full bg-[#14141c] border border-white/5 rounded-xl p-4 text-xs outline-none" placeholder="Atmospheric, Upbeat..." />
-                
                 <div className="p-4 bg-[#14141c] border border-white/5 rounded-2xl space-y-4">
                   <div className="flex items-center justify-between">
-                     <span className="text-[9px] font-black uppercase text-slate-400">Audio Ducking</span>
-                     <button 
-                        onClick={() => setProject({...project, audioConfig: {...project.audioConfig, duckingEnabled: !project.audioConfig.duckingEnabled}})}
-                        className={`w-10 h-5 rounded-full relative transition-all ${project.audioConfig.duckingEnabled ? 'bg-blue-500' : 'bg-white/10'}`}
-                      >
-                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${project.audioConfig.duckingEnabled ? 'right-1' : 'left-1'}`}></div>
-                     </button>
+                    <span className="text-[9px] font-black uppercase text-slate-400">Audio Ducking</span>
+                    <button onClick={() => setProject({...project, audioConfig: {...project.audioConfig, duckingEnabled: !project.audioConfig.duckingEnabled}})} className={`w-10 h-5 rounded-full relative transition-all ${project.audioConfig.duckingEnabled ? 'bg-blue-500' : 'bg-white/10'}`}>
+                      <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${project.audioConfig.duckingEnabled ? 'right-1' : 'left-1'}`}></div>
+                    </button>
                   </div>
                   <p className="text-[7px] text-slate-600 uppercase font-bold leading-relaxed">Automatically lowers music volume when the narrator is speaking.</p>
                 </div>
-
                 <button onClick={handleBakeMusicScore} className="w-full py-4 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-blue-500/20">Generate Music Bed</button>
                 <div className="space-y-2">
-                   <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                      <span>Volume</span>
-                      <span>{project.audioConfig.musicVolume}%</span>
-                   </div>
-                   <input type="range" min="0" max="100" value={project.audioConfig.musicVolume} onChange={(e) => setProject({...project, audioConfig: {...project.audioConfig, musicVolume: parseInt(e.target.value)}})} className="w-full h-1 bg-white/10 appearance-none accent-blue-500 rounded-full" />
+                  <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                    <span>Volume</span><span>{project.audioConfig.musicVolume}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" value={project.audioConfig.musicVolume} onChange={(e) => setProject({...project, audioConfig: {...project.audioConfig, musicVolume: parseInt(e.target.value)}})} className="w-full h-1 bg-white/10 appearance-none accent-blue-500 rounded-full" />
                 </div>
               </div>
             )}
+
             {activeTab === 'foley' && (
               <div className="space-y-6">
                 <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sound FX</h3>
-                <textarea value={activeScene.sfxPrompt || ''} onChange={(e) => updateScene(activeSceneId, {sfxPrompt: e.target.value})} className="w-full h-24 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[11px] outline-none" placeholder="Sound of a laser impact..." />
-                
+                <textarea value={activeScene.sfxPrompt || ''} onChange={(e) => updateScene(activeSceneId, {sfxPrompt: e.target.value})} className="w-full h-24 bg-[#14141c] border border-white/5 rounded-xl p-4 text-[11px] outline-none" placeholder="Heartbeat pulse, nerve crackle..." />
                 <div className="p-4 bg-[#14141c] border border-white/5 rounded-2xl space-y-4">
                   <div className="flex items-center justify-between">
-                     <span className="text-[9px] font-black uppercase text-slate-400">Engagement FX</span>
-                     <button 
-                        onClick={() => setProject({...project, audioConfig: {...project.audioConfig, engagementSfx: !project.audioConfig.engagementSfx}})}
-                        className={`w-10 h-5 rounded-full relative transition-all ${project.audioConfig.engagementSfx ? 'bg-cyan-500' : 'bg-white/10'}`}
-                      >
-                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${project.audioConfig.engagementSfx ? 'right-1' : 'left-1'}`}></div>
-                     </button>
+                    <span className="text-[9px] font-black uppercase text-slate-400">Engagement FX</span>
+                    <button onClick={() => setProject({...project, audioConfig: {...project.audioConfig, engagementSfx: !project.audioConfig.engagementSfx}})} className={`w-10 h-5 rounded-full relative transition-all ${project.audioConfig.engagementSfx ? 'bg-cyan-500' : 'bg-white/10'}`}>
+                      <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${project.audioConfig.engagementSfx ? 'right-1' : 'left-1'}`}></div>
+                    </button>
                   </div>
                   <p className="text-[7px] text-slate-600 uppercase font-bold leading-relaxed">Auto-places transitions and emphasis pops for viral retention.</p>
                 </div>
-
                 <button onClick={handleBakeSFX} disabled={!activeScene.sfxPrompt} className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-black uppercase disabled:opacity-20 transition-all border border-white/10">Bake Scene FX</button>
                 <div className="space-y-2">
-                   <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                      <span>SFX Intensity</span>
-                      <span>{project.audioConfig.sfxIntensity}%</span>
-                   </div>
-                   <input type="range" min="0" max="100" value={project.audioConfig.sfxIntensity} onChange={(e) => setProject({...project, audioConfig: {...project.audioConfig, sfxIntensity: parseInt(e.target.value)}})} className="w-full h-1 bg-white/10 appearance-none accent-slate-500 rounded-full" />
+                  <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                    <span>SFX Intensity</span><span>{project.audioConfig.sfxIntensity}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" value={project.audioConfig.sfxIntensity} onChange={(e) => setProject({...project, audioConfig: {...project.audioConfig, sfxIntensity: parseInt(e.target.value)}})} className="w-full h-1 bg-white/10 appearance-none accent-slate-500 rounded-full" />
                 </div>
               </div>
             )}
           </div>
         </div>
 
+        {/* Preview */}
         <div className="flex-1 bg-[#050507] relative flex flex-col items-center justify-center p-4 overflow-hidden z-10">
           <div className="flex flex-col items-center w-full h-full">
             <div className={`relative flex-1 bg-black shadow-[0_0_100px_rgba(0,0,0,0.8)] border border-white/5 rounded-2xl overflow-hidden flex flex-col transition-all duration-700 max-h-full max-w-full ${project.aspectRatio === '9:16' ? 'aspect-[9/16] h-full w-auto' : 'aspect-video w-full h-auto max-w-5xl'}`}>
-               <div className="flex-1 relative overflow-hidden flex items-center justify-center">
-
-{currentFrame?.videoUrl ? (
-  <video
-    src={currentFrame.videoUrl}
-    className="w-full h-full object-contain"
-    autoPlay
-    loop
-    muted
-  />
-) : currentFrame?.imageUrl ? (
-  <img
-    src={currentFrame.imageUrl}
-    className="w-full h-full object-contain"
-  />
-) : (
-  <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4">
-    <i className="fas fa-cube"></i>
-    <span className="text-[10px] font-black uppercase tracking-[1em]">
-      Director Monitor
-    </span>
-  </div>
-)}
-                 
-                 
-                  {project.captionConfig.showCaptions && activeScene.narrationChunk && (
-                     <div className="absolute bottom-8 left-0 right-0 px-8 flex justify-center pointer-events-none z-20">
-                        <div className={`px-8 py-3 rounded-2xl text-center font-black transition-all border border-white/5 backdrop-blur-md animate-text-${project.captionConfig.animationType}`} style={{ 
-                           fontFamily: project.captionConfig.fontFamily, 
-                           color: project.captionConfig.color, 
-                           backgroundColor: project.captionConfig.showBackground ? project.captionConfig.backgroundColor : 'transparent', 
-                           fontSize: `clamp(2px, 4vw, ${parseInt(project.captionConfig.fontSize)/2}px)`, 
-                           textTransform: project.captionConfig.isUppercase ? 'uppercase' : 'none', 
-                           textShadow: project.captionConfig.textEffect === 'shadow' ? '2px 2px 8px rgba(0,0,0,0.8)' : project.captionConfig.textEffect === 'glow' ? `0 0 12px ${project.captionConfig.color}` : 'none' 
-                        }}>{activeScene.narrationChunk}</div>
-                     </div>
-                  )}
-
-                  {projectStatus !== ProjectStatus.IDLE && (
-                     <div className="absolute inset-0 bg-[#0a0a0f]/95 backdrop-blur-3xl z-50 flex flex-col items-center justify-center gap-4 text-center">
-                        <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(34,211,238,0.2)]"></div>
-                        <span className="text-[10px] font-black uppercase text-cyan-400 tracking-widest">{projectStatus.replace(/_/g, ' ')}</span>
-                     </div>
-                  )}
-               </div>
+              <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+                {currentFrame?.videoUrl ? (
+                  <video src={currentFrame.videoUrl} className="w-full h-full object-contain" autoPlay loop muted />
+                ) : currentFrame?.imageUrl ? (
+                  <img src={currentFrame.imageUrl} className="w-full h-full object-contain" />
+                ) : (
+                  <div className="opacity-5 animate-pulse text-[80px] flex flex-col items-center gap-4">
+                    <i className="fas fa-cube"></i>
+                    <span className="text-[10px] font-black uppercase tracking-[1em]">Director Monitor</span>
+                  </div>
+                )}
+                {project.captionConfig.showCaptions && activeScene.narrationChunk && (
+                  <div className="absolute bottom-8 left-0 right-0 px-8 flex justify-center pointer-events-none z-20">
+                    <div className={`px-8 py-3 rounded-2xl text-center font-black transition-all border border-white/5 backdrop-blur-md`} style={{
+                      fontFamily: project.captionConfig.fontFamily,
+                      color: project.captionConfig.color,
+                      backgroundColor: project.captionConfig.showBackground ? project.captionConfig.backgroundColor : 'transparent',
+                      fontSize: `clamp(2px, 4vw, ${parseInt(project.captionConfig.fontSize)/2}px)`,
+                      textTransform: project.captionConfig.isUppercase ? 'uppercase' : 'none',
+                      textShadow: project.captionConfig.textEffect === 'shadow' ? '2px 2px 8px rgba(0,0,0,0.8)' : project.captionConfig.textEffect === 'glow' ? `0 0 12px ${project.captionConfig.color}` : 'none'
+                    }}>{activeScene.narrationChunk}</div>
+                  </div>
+                )}
+                {projectStatus !== ProjectStatus.IDLE && (
+                  <div className="absolute inset-0 bg-[#0a0a0f]/95 backdrop-blur-3xl z-50 flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(34,211,238,0.2)]"></div>
+                    <span className="text-[10px] font-black uppercase text-cyan-400 tracking-widest">{projectStatus.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+              </div>
             </div>
-
             <div className="w-full max-w-lg px-4 mt-6 z-50">
-               <div className="flex flex-col gap-3 bg-[#0a0a0f]/98 backdrop-blur-3xl px-6 py-4 rounded-3xl border border-white/10 shadow-2xl">
-                 <input type="range" min="0" max={totalLength} step="0.01" value={currentTime} onChange={(e) => handleSeek(parseFloat(e.target.value))} className="w-full h-1 appearance-none cursor-pointer accent-cyan-400 bg-white/10 rounded-full" />
-                 <div className="flex items-center justify-between">
-                   <div className="flex flex-col items-center gap-2">
-                      <div className="flex items-center gap-4">
-                        <button onClick={() => handleSeek(currentTime - 5)} className="text-slate-600 hover:text-white transition-all active:scale-90"><i className="fas fa-backward-step"></i></button>
-                        <button onClick={() => setIsPlayingSequence(!isPlayingSequence)} className="w-12 h-12 bg-cyan-400 text-black rounded-full flex items-center justify-center shadow-lg shadow-cyan-400/20 hover:scale-105 active:scale-95 transition-all"><i className={`fas ${isPlayingSequence ? 'fa-pause' : 'fa-play'} text-lg`}></i></button>
-                        <button onClick={() => handleSeek(currentTime + 5)} className="text-slate-600 hover:text-white transition-all active:scale-90"><i className="fas fa-backward-step"></i></button>
-                      </div>
-                      <div className="flex items-center gap-4 opacity-60">
-                         <button onClick={handleUndo} disabled={historyPast.length === 0} className={`flex items-center gap-1.5 transition-all ${historyPast.length > 0 ? 'text-slate-400 hover:text-white' : 'text-slate-800 pointer-events-none'}`}><i className="fas fa-rotate-left text-[10px]"></i><span className="text-[7px] font-black uppercase tracking-widest">Undo</span></button>
-                         <button onClick={handleRedo} disabled={historyFuture.length === 0} className={`flex items-center gap-1.5 transition-all ${historyFuture.length > 0 ? 'text-slate-400 hover:text-white' : 'text-slate-800 pointer-events-none'}`}><span className="text-[7px] font-black uppercase tracking-widest">Redo</span><i className="fas fa-rotate-right text-[10px]"></i></button>
-                      </div>
-                   </div>
-                   <div className="flex flex-col items-end">
-                      <span className="text-xs font-mono font-black text-cyan-400">{currentTime.toFixed(2)}s</span>
-                      <span className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">/ {totalLength.toFixed(1)}s Master</span>
-                   </div>
-                 </div>
-               </div>
+              <div className="flex flex-col gap-3 bg-[#0a0a0f]/98 backdrop-blur-3xl px-6 py-4 rounded-3xl border border-white/10 shadow-2xl">
+                <input type="range" min="0" max={totalLength} step="0.01" value={currentTime} onChange={(e) => handleSeek(parseFloat(e.target.value))} className="w-full h-1 appearance-none cursor-pointer accent-cyan-400 bg-white/10 rounded-full" />
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => handleSeek(currentTime - 5)} className="text-slate-600 hover:text-white transition-all active:scale-90"><i className="fas fa-backward-step"></i></button>
+                      <button onClick={() => setIsPlayingSequence(!isPlayingSequence)} className="w-12 h-12 bg-cyan-400 text-black rounded-full flex items-center justify-center shadow-lg shadow-cyan-400/20 hover:scale-105 active:scale-95 transition-all"><i className={`fas ${isPlayingSequence ? 'fa-pause' : 'fa-play'} text-lg`}></i></button>
+                      <button onClick={() => handleSeek(currentTime + 5)} className="text-slate-600 hover:text-white transition-all active:scale-90"><i className="fas fa-forward-step"></i></button>
+                    </div>
+                    <div className="flex items-center gap-4 opacity-60">
+                      <button onClick={handleUndo} disabled={historyPast.length === 0} className={`flex items-center gap-1.5 transition-all ${historyPast.length > 0 ? 'text-slate-400 hover:text-white' : 'text-slate-800 pointer-events-none'}`}><i className="fas fa-rotate-left text-[10px]"></i><span className="text-[7px] font-black uppercase tracking-widest">Undo</span></button>
+                      <button onClick={handleRedo} disabled={historyFuture.length === 0} className={`flex items-center gap-1.5 transition-all ${historyFuture.length > 0 ? 'text-slate-400 hover:text-white' : 'text-slate-800 pointer-events-none'}`}><span className="text-[7px] font-black uppercase tracking-widest">Redo</span><i className="fas fa-rotate-right text-[10px]"></i></button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-xs font-mono font-black text-cyan-400">{currentTime.toFixed(2)}s</span>
+                    <span className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">/ {totalLength.toFixed(1)}s Master</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      <div 
-        onMouseDown={handleResizeTimelineStart} 
-        onClick={(e) => { if (!isResizingTimeline) handleToggleMinimize(); }} 
-        className={`h-4 w-full bg-[#0a0a0f] hover:bg-cyan-400/20 cursor-row-resize transition-all flex items-center justify-center group z-50 shrink-0 border-t border-b border-white/5 active:bg-cyan-500/20 ${isResizingTimeline ? 'bg-cyan-400/30' : ''}`}
-        title="Drag to resize or Click to toggle timeline visibility"
-      >
+      <div onMouseDown={handleResizeTimelineStart} onClick={(e) => { if (!isResizingTimeline) handleToggleMinimize(); }} className={`h-4 w-full bg-[#0a0a0f] hover:bg-cyan-400/20 cursor-row-resize transition-all flex items-center justify-center group z-50 shrink-0 border-t border-b border-white/5 active:bg-cyan-500/20 ${isResizingTimeline ? 'bg-cyan-400/30' : ''}`}>
         <div className={`w-12 h-1 rounded-full bg-white/10 group-hover:bg-cyan-400/60 transition-all ${isResizingTimeline ? 'bg-cyan-400 w-20 h-1.5' : ''}`}></div>
       </div>
 
       <footer className="bg-[#08080c] z-40 shrink-0 overflow-hidden shadow-[0_-10px_30px_rgba(0,0,0,0.5)]" style={{ height: timelineHeight }}>
-        <Timeline 
-           scenes={project.scenes} 
-           extraTracks={project.extraTracks}
-           onSplitClip={handleSplitClip}
-           activeSceneId={activeSceneId} 
-           onSelectScene={setActiveSceneId} 
-           onOpenFrameEditor={() => setTimelineMode('frame')}
-           onAddScene={() => { saveToHistory(); setProject(p => ({...p, scenes: [...p.scenes, 
-  {
-  id: 'sc-' + Date.now(),
-  order: p.scenes.length,
-  mediaType: 'ai',
-
-  aiPrompt: '',
-  startFramePrompt: '',
-  targetFramePrompt: '',
-  videoPrompt: '',
-
-  stockQuery: '',
-
-  startImageUrl: '',
-  targetImageUrl: '',
-  videoUrl: '',
-
-  frames: [],
-
-  narrationChunk: '',
-  status: 'ready',
-  duration: project.sceneDuration,
-  narrationDuration: project.sceneDuration,
-  sfxPrompt: ''
-  }
-           ]
-            }));
-          }} 
-           onRemoveScene={handleRemoveScene} 
-           onUpdateSceneDuration={(id, dur) => updateScene(id, {duration: dur})} 
-           onUpdateNarrationDuration={(id, dur) => updateScene(id, {narrationDuration: dur})} 
-           onUpdateGlobalClip={updateGlobalAudioClip} 
-           onAddGlobalClip={addGlobalAudioClip} 
-           onRemoveGlobalClip={removeGlobalAudioClip} 
-           onPreviewNarration={playRawPcm} 
-           onBakeNarration={handleBakeNarration} 
-           onMinimize={handleToggleMinimize} 
-           isMinimized={isTimelineMinimized} 
-           defaultDuration={project.sceneDuration} 
-           totalProjectDuration={totalLength} 
-           currentTime={currentTime} 
-           onSeek={handleSeek} 
+        <Timeline
+          scenes={project.scenes}
+          extraTracks={project.extraTracks}
+          onSplitClip={handleSplitClip}
+          activeSceneId={activeSceneId}
+          onSelectScene={setActiveSceneId}
+          onOpenFrameEditor={() => setTimelineMode('frame')}
+          onAddScene={() => {
+            saveToHistory();
+            setProject(p => ({ ...p, scenes: [...p.scenes, {
+              id: 'sc-' + Date.now(), order: p.scenes.length, mediaType: 'ai',
+              aiPrompt: '', startFramePrompt: '', targetFramePrompt: '', videoPrompt: '',
+              stockQuery: '', startImageUrl: '', targetImageUrl: '', videoUrl: '',
+              frames: [], narrationChunk: '', status: 'ready',
+              duration: project.sceneDuration, narrationDuration: project.sceneDuration, sfxPrompt: ''
+            }] }));
+          }}
+          onRemoveScene={handleRemoveScene}
+          onUpdateSceneDuration={(id, dur) => updateScene(id, {duration: dur})}
+          onUpdateNarrationDuration={(id, dur) => updateScene(id, {narrationDuration: dur})}
+          onUpdateGlobalClip={updateGlobalAudioClip}
+          onAddGlobalClip={addGlobalAudioClip}
+          onRemoveGlobalClip={removeGlobalAudioClip}
+          onPreviewNarration={playRawPcm}
+          onBakeNarration={handleBakeNarration}
+          onMinimize={handleToggleMinimize}
+          isMinimized={isTimelineMinimized}
+          defaultDuration={project.sceneDuration}
+          totalProjectDuration={totalLength}
+          currentTime={currentTime}
+          onSeek={handleSeek}
         />
       </footer>
     </div>
