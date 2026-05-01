@@ -40,7 +40,7 @@ export type Frame = {
   prompt?: string
   imageUrl?: string
   videoUrl?: string
-  options?: string[]   // 10 selectable stock images
+  options?: string[]
   duration: number
   type: 'ai' | 'stock'
 }
@@ -54,38 +54,31 @@ export interface Clip {
 
 export interface Scene {
   id: string;
-  order: number
-  // Scene mode
+  order: number;
   mediaType: 'ai' | 'stock';
 
-  // AI scene prompts
   aiPrompt?: string;
   startFramePrompt?: string;
   targetFramePrompt?: string;
   videoPrompt?: string;
 
-  // Stock scene prompt
   stockQuery?: string;
 
-  // Generated media
   startImageUrl?: string;
   targetImageUrl?: string;
   videoUrl?: string;
 
-  referenceFrameUrl?: string
+  referenceFrameUrl?: string;
 
-  // Stock montage shots
   frames: Frame[];
-  clips?: Clip[]
+  clips?: Clip[];
 
-  characterIds?: string[]
-  environmentId?: string
+  characterIds?: string[];
+  environmentId?: string;
 
-  // narration
   narrationChunk?: string;
   narrationAudioUrl?: string;
 
-  // timing
   duration?: number;
   narrationDuration?: number;
 
@@ -93,6 +86,19 @@ export interface Scene {
 
   sfxPrompt?: string;
   motionSensitivity?: number;
+
+  // ── ADDED: KnowIt3D shot type hint ──
+  // Comes from generateKnowIt scene data.
+  // Tells promptBuilder which of the 5 shot types
+  // this scene should use (type-a through type-e),
+  // which determines the character state (1–4).
+  // Optional so non-KnowIt scenes are unaffected.
+  shotTypeHint?: string;
+
+  // ── ADDED: scale label for KnowIt3D body section ──
+  // Marks whether this scene is EXTERNAL, ORGAN, or CELLULAR
+  // so the prompt builder assigns the right visual detail level.
+  scaleLabel?: string;
 }
 
 export interface CaptionConfig {
@@ -104,7 +110,7 @@ export interface CaptionConfig {
   isUppercase: boolean;
   showCaptions: boolean;
   animationType: string;
-  textEffect: string; // 'none', 'shadow', 'glow', 'outline'
+  textEffect: string;
 }
 
 export interface AudioConfig {
@@ -112,7 +118,7 @@ export interface AudioConfig {
   musicVolume: number;
   sfxIntensity: number;
   duckingEnabled: boolean;
-  engagementSfx: boolean; // Auto-place 'pop' and 'whoosh' sounds
+  engagementSfx: boolean;
 }
 
 export interface VoiceSettings {
@@ -120,54 +126,51 @@ export interface VoiceSettings {
   energy: 'low' | 'normal' | 'high';
 }
 
-// ===============================
-// CHARACTER PROFILE
-// ===============================
-
 export interface CharacterProfile {
-  id: string
-  identityTag?: string
-  name: string
-  description: string
-
+  id: string;
+  identityTag?: string;
+  name: string;
+  description: string;
   appearance: {
-    gender?: string
-    age?: string
-    ethnicity?: string
-    face?: string
-    hair?: string
-    eyes?: string
-    facialHair?: string
-  }
-
-  clothing?: string
-  accessories?: string
-
-  referenceImage?: string
+    gender?: string;
+    age?: string;
+    ethnicity?: string;
+    face?: string;
+    hair?: string;
+    eyes?: string;
+    facialHair?: string;
+  };
+  clothing?: string;
+  accessories?: string;
+  referenceImage?: string;
 }
 
-
-// ===============================
-// ENVIRONMENT PROFILE
-// ===============================
-
 export interface EnvironmentProfile {
-  id: string
-  name: string
-  description: string
-
-  lighting?: string
-  weather?: string
-  timeOfDay?: string
-  atmosphere?: string
+  id: string;
+  name: string;
+  description: string;
+  lighting?: string;
+  weather?: string;
+  timeOfDay?: string;
+  atmosphere?: string;
 }
 
 export interface Project {
   id: string;
   title: string;
   channel: string;
-  characters?: CharacterProfile[]
-  environments?: EnvironmentProfile[]
+
+  // ── ADDED: channelId ──
+  // Stored directly on the project so every subsystem
+  // (promptBuilder, geminiService, App.tsx UI) can read
+  // which channel this project belongs to without passing
+  // it separately through every function call.
+  // 'knowit' triggers the KnowIt3D character system.
+  // All other values fall back to generic behavior.
+  channelId?: string;
+
+  characters?: CharacterProfile[];
+  environments?: EnvironmentProfile[];
   scenes: Scene[];
   extraTracks: AudioClip[][];
   backgroundMusicVibe: string;
@@ -189,14 +192,14 @@ export type VideoMode = 'velocity' | 'cinematic';
 
 export interface ChannelIdea {
   id: string;
-  channel: string;        // mindforge, cosmora, etc
+  channel: string;
   title: string;
-  tag: string;            // psychology, space, mystery etc
+  tag: string;
   suggestedMode: VideoMode;
   createdAt: number;
 }
 
-interface IdeaBatch {
+export interface IdeaBatch {
   batchId: string;
   createdAt: string;
   ideas: ChannelIdea[];
