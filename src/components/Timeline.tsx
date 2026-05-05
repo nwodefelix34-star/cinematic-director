@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Scene, AudioClip } from '../types';
 
 interface TimelineProps {
@@ -35,11 +35,16 @@ interface DragState {
   startStartTime?: number;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ 
-  scenes, 
+const LABEL_WIDTH = 52;
+const MIN_PPS = 14;
+const MAX_PPS = 120;
+const DEFAULT_PPS = 36;
+
+const Timeline: React.FC<TimelineProps> = ({
+  scenes,
   extraTracks,
-  activeSceneId, 
-  onSelectScene, 
+  activeSceneId,
+  onSelectScene,
   onOpenFrameEditor,
   onAddScene,
   onRemoveScene,
@@ -56,19 +61,32 @@ const Timeline: React.FC<TimelineProps> = ({
   defaultDuration,
   totalProjectDuration,
   currentTime,
-  onSeek
+  onSeek,
 }) => {
-  const PIXELS_PER_SECOND = 28; // Reduced from 44 for more compact horizontal view
-  const LABEL_WIDTH = 80; // Reduced from 96
-  const dragRef = useRef<DragState | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [pps, setPps] = useState(DEFAULT_PPS); // pixels per second
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedTool, setSelectedTool] = useState<'select' | 'split' | 'trim'>('select');
 
-  const handleMouseDown = (
-    e: React.MouseEvent, 
-    id: string, 
-    type: DragState['type'], 
-    mode: DragState['mode'], 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+
+  const totalWidth = Math.max(totalProjectDuration, 15) * pps + LABEL_WIDTH + 120;
+
+  // ── Ruler tick calculation ──
+  const getRulerTicks = () => {
+    const interval = pps >= 60 ? 0.5 : pps >= 30 ? 1 : pps >= 14 ? 2 : 5;
+    const count = Math.ceil(totalProjectDuration / interval) + 2;
+    return Array.from({ length: count }, (_, i) => i * interval);
+  };
+
+  // ── Drag handlers ──
+  const handleMouseDown = useCallback((
+    e: React.MouseEvent,
+    id: string,
+    type: DragState['type'],
+    mode: DragState['mode'],
     startDuration: number,
     startStartTime?: number,
     trackIndex?: number
@@ -76,56 +94,52 @@ const Timeline: React.FC<TimelineProps> = ({
     e.stopPropagation();
     dragRef.current = { id, type, mode, startX: e.clientX, startDuration, startStartTime, trackIndex };
     setIsDragging(true);
+    document.body.style.cursor = mode === 'move' ? 'grabbing' : 'ew-resize';
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    
-    if (mode === 'move') document.body.style.cursor = 'grabbing';
-    else document.body.style.cursor = 'ew-resize';
-  };
+  }, [pps]);
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!dragRef.current) return;
-    const deltaX = e.clientX - dragRef.current.startX;
-    
-    const { type, mode, id, startDuration, startStartTime, trackIndex } = dragRef.current;
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      if (!dragRef.current) return;
+      const deltaX = e.clientX - dragRef.current.startX;
+      const { type, mode, id, startDuration, startStartTime, trackIndex } = dragRef.current;
 
-    if (type === 'playhead') {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const scrollLeft = containerRef.current.scrollLeft;
-      const relativeX = e.clientX - rect.left + scrollLeft;
-      const newTime = Math.max(0, Math.min(totalProjectDuration, (relativeX - LABEL_WIDTH) / PIXELS_PER_SECOND));
-      onSeek(newTime);
-      return;
-    }
+      if (type === 'playhead') {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const scrollLeft = containerRef.current.scrollLeft;
+        const relX = e.clientX - rect.left + scrollLeft - LABEL_WIDTH;
+        const newTime = Math.max(0, Math.min(totalProjectDuration, relX / pps));
+        onSeek(newTime);
+        return;
+      }
 
-    const deltaSeconds = deltaX / PIXELS_PER_SECOND;
+      const deltaS = deltaX / pps;
 
-    if (type === 'visual' || type === 'narration') {
-      const multiplier = mode === 'resize-left' ? -1 : 1;
-      const newVal = Math.max(0.4, startDuration + (deltaSeconds * multiplier));
-      if (type === 'visual') onUpdateSceneDuration(id, newVal);
-      else onUpdateNarrationDuration(id, newVal);
-    } 
-    else if (type === 'extra' && trackIndex !== undefined && startStartTime !== undefined) {
-      if (mode === 'move') {
-        onUpdateGlobalClip(trackIndex, id, { startTime: Math.max(0, startStartTime + deltaSeconds) });
-      } else if (mode === 'resize-right') {
-        onUpdateGlobalClip(trackIndex, id, { duration: Math.max(0.1, startDuration + deltaSeconds) });
-      } else if (mode === 'resize-left') {
-        const potentialStart = startStartTime + deltaSeconds;
-        const potentialDuration = startDuration - deltaSeconds;
-        if (potentialDuration > 0.1 && potentialStart >= 0) {
-          onUpdateGlobalClip(trackIndex, id, { 
-            startTime: potentialStart, 
-            duration: potentialDuration 
-          });
+      if (type === 'visual') {
+        const newDur = Math.max(0.5, startDuration + (mode === 'resize-left' ? -deltaS : deltaS));
+        onUpdateSceneDuration(id, newDur);
+      } else if (type === 'narration') {
+        const newDur = Math.max(0.5, startDuration + (mode === 'resize-left' ? -deltaS : deltaS));
+        onUpdateNarrationDuration(id, newDur);
+      } else if (type === 'extra' && trackIndex !== undefined && startStartTime !== undefined) {
+        if (mode === 'move') {
+          onUpdateGlobalClip(trackIndex, id, { startTime: Math.max(0, startStartTime + deltaS) });
+        } else if (mode === 'resize-right') {
+          onUpdateGlobalClip(trackIndex, id, { duration: Math.max(0.5, startDuration + deltaS) });
+        } else if (mode === 'resize-left') {
+          const ps = startStartTime + deltaS;
+          const pd = startDuration - deltaS;
+          if (pd > 0.5 && ps >= 0) onUpdateGlobalClip(trackIndex, id, { startTime: ps, duration: pd });
         }
       }
-    }
-  };
+    });
+  }, [pps, onSeek, onUpdateSceneDuration, onUpdateNarrationDuration, onUpdateGlobalClip, totalProjectDuration]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (dragRef.current) {
       const { type, id, trackIndex } = dragRef.current;
       if (type === 'extra' && trackIndex !== undefined) {
@@ -134,285 +148,434 @@ const Timeline: React.FC<TimelineProps> = ({
     }
     dragRef.current = null;
     setIsDragging(false);
+    document.body.style.cursor = 'default';
+    cancelAnimationFrame(rafRef.current);
     window.removeEventListener('mousemove', handleMouseMove);
     window.removeEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'default';
+  }, [handleMouseMove, onUpdateGlobalClip]);
+
+  // ── Click on ruler to seek ──
+  const handleRulerClick = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const scrollLeft = containerRef.current.scrollLeft;
+    const relX = e.clientX - rect.left + scrollLeft - LABEL_WIDTH;
+    onSeek(Math.max(0, Math.min(totalProjectDuration, relX / pps)));
   };
 
+  // ── Auto-scroll playhead into view ──
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const playheadX = LABEL_WIDTH + currentTime * pps;
+    const { scrollLeft, clientWidth } = containerRef.current;
+    const margin = 80;
+    if (playheadX > scrollLeft + clientWidth - margin) {
+      containerRef.current.scrollLeft = playheadX - clientWidth + margin + 40;
+    } else if (playheadX < scrollLeft + LABEL_WIDTH + margin) {
+      containerRef.current.scrollLeft = Math.max(0, playheadX - LABEL_WIDTH - margin);
+    }
+  }, [currentTime, pps]);
+
+  // ── Scene start time calculator ──
+  const getSceneStart = (sceneId: string) => {
+    let acc = 0;
+    for (const s of scenes) {
+      if (s.id === sceneId) return acc;
+      acc += s.duration || defaultDuration;
+    }
+    return 0;
+  };
+
+  // ── Playhead X position ──
+  const playheadX = LABEL_WIDTH + currentTime * pps;
+
+  const ticks = getRulerTicks();
+
   return (
-    <div className={`flex flex-col h-full bg-[#08080c] transition-all select-none border-t border-white/5 ${isDragging ? 'pointer-events-auto' : ''}`}>
-      {/* Timeline Controls */}
-      <div className="h-8 border-b border-white/5 bg-[#0a0a0f] flex items-center px-4 justify-between shrink-0">
-        <div className="flex items-center gap-4 sm:gap-6">
-          <button onClick={onAddScene} className="text-[8px] font-black text-slate-500 hover:text-[#3ab7bf] uppercase tracking-widest transition-all flex items-center gap-2 group">
-            <i className="fas fa-plus-circle text-[#3ab7bf] text-[10px] group-hover:scale-110 transition-transform"></i> Clip
-          </button>
-          <div className="h-2 w-[1px] bg-white/10 hidden sm:block"></div>
-          <div className="hidden sm:flex text-[7px] font-black text-slate-700 uppercase tracking-widest items-center gap-2">
-            <i className="fas fa-layer-group text-[#3ab7bf] text-[9px]"></i> Tracks
-          </div>
-        </div>
+    <div className={`flex flex-col h-full bg-[#08080c] select-none border-t border-white/5 ${isDragging ? 'cursor-grabbing' : ''}`}>
+
+      {/* ── TOP BAR: tools + zoom ── */}
+      <div className="h-9 border-b border-white/5 bg-[#0a0a0f] flex items-center px-3 justify-between shrink-0 gap-4">
+
+        {/* Left: Add + Tools */}
         <div className="flex items-center gap-3">
-          <div className="text-[8px] font-mono text-slate-600 tracking-tighter uppercase font-bold bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
-            <span className="text-[#3ab7bf] mr-1">{totalProjectDuration.toFixed(1)}s</span>
+          <button
+            onClick={onAddScene}
+            className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-all"
+          >
+            <i className="fas fa-plus-circle text-[10px]"></i> Clip
+          </button>
+
+          <div className="w-px h-4 bg-white/10" />
+
+          {/* Tool selector */}
+          {[
+            { id: 'select', icon: 'fa-arrow-pointer', label: 'Select' },
+            { id: 'split', icon: 'fa-scissors', label: 'Split' },
+            { id: 'trim', icon: 'fa-compress-alt', label: 'Trim' },
+          ].map(tool => (
+            <button
+              key={tool.id}
+              onClick={() => setSelectedTool(tool.id as any)}
+              title={tool.label}
+              className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] transition-all ${selectedTool === tool.id ? 'bg-cyan-500 text-black' : 'text-slate-600 hover:text-white'}`}
+            >
+              <i className={`fas ${tool.icon}`}></i>
+            </button>
+          ))}
+
+          <div className="w-px h-4 bg-white/10" />
+
+          {/* Active scene actions */}
+          {activeSceneId && (
+            <button
+              onClick={() => {
+                const sceneStart = getSceneStart(activeSceneId);
+                const localTime = currentTime - sceneStart;
+                onSplitClip(activeSceneId, 0, localTime);
+              }}
+              className="text-[8px] font-black uppercase text-slate-500 hover:text-white tracking-widest flex items-center gap-1 transition-all"
+            >
+              <i className="fas fa-scissors text-[9px]"></i> Split
+            </button>
+          )}
+        </div>
+
+        {/* Right: Zoom + time */}
+        <div className="flex items-center gap-3">
+          <span className="text-[8px] font-mono text-slate-600">{currentTime.toFixed(2)}s</span>
+          <span className="text-slate-700 text-[8px]">/</span>
+          <span className="text-[8px] font-mono text-cyan-500">{totalProjectDuration.toFixed(1)}s</span>
+
+          <div className="w-px h-4 bg-white/10" />
+
+          {/* Zoom */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPps(p => Math.max(MIN_PPS, p - 8))} className="text-slate-600 hover:text-white text-[9px] w-5 h-5 flex items-center justify-center">
+              <i className="fas fa-minus"></i>
+            </button>
+            <input
+              type="range" min={MIN_PPS} max={MAX_PPS} value={pps}
+              onChange={e => setPps(Number(e.target.value))}
+              className="w-16 h-1 accent-cyan-400 bg-white/10 rounded-full appearance-none cursor-pointer"
+            />
+            <button onClick={() => setPps(p => Math.min(MAX_PPS, p + 8))} className="text-slate-600 hover:text-white text-[9px] w-5 h-5 flex items-center justify-center">
+              <i className="fas fa-plus"></i>
+            </button>
           </div>
+
           {onMinimize && (
-            <button onClick={onMinimize} className="w-6 h-6 flex items-center justify-center text-slate-700 hover:text-[#3ab7bf] transition-colors">
+            <button onClick={onMinimize} className="w-6 h-6 flex items-center justify-center text-slate-700 hover:text-cyan-400 transition-colors">
               <i className={`fas fa-chevron-${isMinimized ? 'up' : 'down'} text-[8px]`}></i>
             </button>
           )}
         </div>
       </div>
 
-      {activeSceneId !== "" && (
-        <div className="h-8 bg-[#0f0f16] border-b border-white/5 flex items-center gap-3 px-3 text-[9px] text-slate-400">
-
-          <button
-  onClick={() => {
-    const scene = scenes.find(s => s.id === activeSceneId)
-    if (!scene) return
-
-    onSplitClip(activeSceneId, -1, currentTime)
-  }}
-  className="hover:text-white transition"
->
-  ✂ Split
-</button>
-
-          <button className="hover:text-white transition">
-            ⧉ Duplicate
-          </button>
-
-          <button className="hover:text-white transition">
-            ✂ Trim
-          </button>
-
-          <button className="hover:text-white transition">
-            ⚡ Speed
-          </button>
-
-          <button className="hover:text-white transition">
-            🎬 Frames
-          </button>
-
-        </div>
-      )}
-
       {!isMinimized && (
-        <div ref={containerRef} className="flex-1 overflow-x-auto overflow-y-auto custom-scroll px-3 sm:px-4 py-3 relative">
-          <div className="flex flex-col gap-4 min-w-max relative pb-4">
-            
-            {/* Playhead Indicator */}
-            <div 
-              className="absolute top-0 bottom-0 w-[1px] bg-[#3ab7bf] shadow-[0_0_8px_rgba(58,183,191,0.4)] z-[100] transition-transform duration-100 ease-linear"
-              style={{ transform: `translateX(${LABEL_WIDTH + (currentTime * PIXELS_PER_SECOND)}px)` }}
+        <div ref={containerRef} className="flex-1 overflow-auto relative" style={{ cursor: isDragging ? 'grabbing' : 'default' }}>
+          <div style={{ width: totalWidth, minHeight: '100%', position: 'relative' }}>
+
+            {/* ── RULER ── */}
+            <div
+              ref={rulerRef}
+              onClick={handleRulerClick}
+              className="sticky top-0 z-50 bg-[#0a0a0f] border-b border-white/10 flex items-end cursor-pointer"
+              style={{ height: 24, width: totalWidth }}
             >
-              <div 
-                onMouseDown={(e) => handleMouseDown(e, 'playhead', 'playhead', 'move', 0)}
-                className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-4 flex items-start justify-center cursor-grab active:cursor-grabbing group"
-              >
-                <div className="w-2.5 h-2.5 bg-[#3ab7bf] rounded-sm rotate-45 shadow-lg group-hover:scale-110 transition-transform"></div>
+              {/* Label spacer */}
+              <div style={{ width: LABEL_WIDTH, flexShrink: 0 }} />
+
+              {/* Ticks */}
+              <div className="relative flex-1 h-full">
+                {ticks.map(t => {
+                  const x = t * pps;
+                  const isMain = Number.isInteger(t);
+                  return (
+                    <div
+                      key={t}
+                      className="absolute bottom-0 flex flex-col items-center"
+                      style={{ left: x }}
+                    >
+                      <div className={`${isMain ? 'h-3 bg-white/20' : 'h-1.5 bg-white/10'} w-px`} />
+                      {isMain && (
+                        <span className="text-[7px] font-mono text-slate-600 absolute bottom-3 -translate-x-1/2">{t}s</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Visual Master Track */}
-            <div className="flex items-center gap-3">
-               <div className="w-16 shrink-0 text-[6px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-                 <i className="fas fa-video-camera text-[#3ab7bf] text-[8px]"></i> Visual
-               </div>
-               <div className="flex items-center">
-                  {scenes.map((scene, idx) => {
-                    const dur = scene.duration || defaultDuration;
-                    const isActive = activeSceneId === scene.id;
-                    return (
-                      <div 
-                        key={scene.id} 
-                        className={`relative group h-12 sm:h-16 rounded-lg border transition-all overflow-hidden flex items-center justify-center cursor-pointer shrink-0
-                          ${isActive ? 'border-[#3ab7bf] bg-[#3ab7bf]/10' : 'border-[#1a1a24] bg-[#111116] hover:border-slate-700'}
-                        `}
-                        style={{ width: `${dur * PIXELS_PER_SECOND}px`, minWidth: '40px' }}
-                        onClick={(e) => {
-
-  const rect = e.currentTarget.getBoundingClientRect()
-  const clickX = e.clientX - rect.left
-
-  const frameCount =
-  scene.clips?.flatMap(c => c.frames).length ||
-  scene.frames?.length ||
-  1
-  const frameWidth = rect.width / frameCount
-
-  const clickedFrame = Math.floor(clickX / frameWidth)
-
-  onSelectScene(scene.id)
-
-  if (scene.frames && scene.frames.length > 0) {
-    window.dispatchEvent(
-      new CustomEvent("selectFrame", {
-        detail: clickedFrame
-      })
-    )
-  }
-                          
-onOpenFrameEditor()
-                          
-}}
-                      >
-                        <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'visual', 'resize-left', dur)} className="absolute left-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/30 cursor-ew-resize transition-all z-20 opacity-0 group-hover:opacity-100"></div>
-
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (scenes.length > 1) onRemoveScene(scene.id);
-                          }}
-                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all z-30 scale-75"
-                        >
-                          <i className="fas fa-times text-[8px]"></i>
-                        </button>
-
-                        <button
-  onClick={(e) => {
-    e.stopPropagation()
-
-    const splitTime =
-      (scene.duration || defaultDuration) / 2
-
-    onSplitClip(scene.id, -1, currentTime)
-  }}
-  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-yellow-500/80 text-black flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-yellow-400 transition-all z-30 scale-75"
->
-  <i className="fas fa-scissors text-[8px]"></i>
-</button>
-
-                        {scene.clips && scene.clips.length > 0 ? (
-  <div className="absolute inset-0 flex">
-    {scene.clips.flatMap(clip => clip.frames).map((frame) => (
-      <div
-        key={frame.id}
-        className="h-full"
-        style={{
-          width: `${100 / scene.clips.flatMap(c => c.frames).length}%`
-        }}
-      >
-        {frame.imageUrl && (
-          <img
-            src={frame.imageUrl}
-            className="w-full h-full object-cover opacity-60 pointer-events-none"
-          />
-        )}
-      </div>
-    ))}
-  </div>
-) : (
-  <>
-    <div className="opacity-10 scale-75">
-      <i className="fas fa-image text-lg"></i>
-    </div>
-
-    <div className="absolute bottom-0.5 left-1 px-1 bg-black/70 rounded text-[6px] text-white font-black z-10 pointer-events-none">
-      {dur.toFixed(1)}s
-    </div>
-
-    <div
-      onMouseDown={(e) =>
-        handleMouseDown(e, scene.id, 'visual', 'resize-right', dur)
-      }
-      className="absolute right-0 top-0 bottom-0 w-2 hover:bg-[#3ab7bf]/60 cursor-ew-resize transition-all z-20 flex items-center justify-center"
-    >
-      <div className="w-[1px] h-4 bg-[#3ab7bf]/50 rounded-full"></div>
-    </div>
-  </>
-)}
-</div>
-);
-})}
-               </div>
+            {/* ── PLAYHEAD ── */}
+            <div
+              className="absolute top-0 bottom-0 z-[60] pointer-events-none"
+              style={{ left: playheadX, top: 0 }}
+            >
+              {/* Head diamond */}
+              <div
+                className="absolute -top-0 left-1/2 -translate-x-1/2 pointer-events-auto cursor-grab active:cursor-grabbing"
+                onMouseDown={e => handleMouseDown(e, 'playhead', 'playhead', 'move', 0)}
+              >
+                <div
+                  style={{
+                    width: 10, height: 10,
+                    background: '#22d3ee',
+                    clipPath: 'polygon(50% 100%, 0 0, 100% 0)',
+                    marginTop: 14
+                  }}
+                />
+              </div>
+              {/* Line */}
+              <div
+                className="absolute top-6 bottom-0 w-px bg-cyan-400/80 shadow-[0_0_6px_rgba(34,211,238,0.5)]"
+                style={{ left: 0 }}
+              />
             </div>
 
-            {/* Narration Master Track */}
-            <div className="flex items-center gap-3">
-               <div className="w-16 shrink-0 text-[6px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-                 <i className="fas fa-microphone-lines text-amber-500 text-[8px]"></i> Voice
-               </div>
-               <div className="flex items-center">
-                  {scenes.map((scene) => {
-                    const dur = scene.narrationDuration || scene.duration || defaultDuration;
-                    const isActive = activeSceneId === scene.id;
-                    return (
-                      <div 
-                        key={`n-${scene.id}`} 
-                        className={`relative group h-8 sm:h-10 rounded-lg border flex flex-col justify-center px-2 transition-all cursor-pointer overflow-hidden shrink-0
-                          ${isActive ? 'bg-amber-500/10 border-amber-500/40' : 'bg-[#111116] border-[#1a1a24] hover:border-slate-800'}
-                        `}
-                        style={{ width: `${dur * PIXELS_PER_SECOND}px`, minWidth: '30px' }}
-                        onClick={() => onSelectScene(scene.id)}
-                      >
-                        <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'narration', 'resize-left', dur)} className="absolute left-0 top-0 bottom-0 w-2 hover:bg-amber-500/30 cursor-ew-resize transition-all z-20 opacity-0 group-hover:opacity-100"></div>
+            {/* ── TRACKS ── */}
+            <div className="flex flex-col gap-px pt-1 pb-6">
 
-                        <div className="flex items-center gap-1 relative z-10 overflow-hidden">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (scene.narrationAudioUrl) onPreviewNarration(scene.narrationAudioUrl);
-                              else onBakeNarration(scene.id);
-                            }}
-                            className={`w-5 h-5 rounded-md flex items-center justify-center bg-black/40 border border-white/5 transition-all hover:scale-105 shrink-0 ${scene.narrationAudioUrl ? 'text-amber-500' : 'text-slate-600 hover:text-amber-500'}`}
+              {/* ══ VISUAL TRACK ══ */}
+              <TrackRow label="Visual" icon="fa-film" iconColor="text-cyan-400">
+                {scenes.map(scene => {
+                  const dur = scene.duration || defaultDuration;
+                  const isActive = activeSceneId === scene.id;
+                  const thumb = scene.frames?.[0]?.imageUrl || scene.clips?.[0]?.frames?.[0]?.imageUrl;
+
+                  return (
+                    <div
+                      key={scene.id}
+                      className={`relative group h-14 rounded-lg border overflow-hidden shrink-0 transition-all ${
+                        isActive
+                          ? 'border-cyan-400 ring-1 ring-cyan-400/30'
+                          : 'border-white/10 hover:border-white/25'
+                      }`}
+                      style={{ width: dur * pps, minWidth: 32 }}
+                      onClick={() => {
+                        onSelectScene(scene.id);
+                        if (selectedTool === 'split') {
+                          const sceneStart = getSceneStart(scene.id);
+                          const localTime = currentTime - sceneStart;
+                          onSplitClip(scene.id, 0, localTime);
+                        }
+                      }}
+                    >
+                      {/* Thumbnail filmstrip */}
+                      {thumb ? (
+                        <div className="absolute inset-0 flex">
+                          {Array.from({ length: Math.max(1, Math.floor(dur * pps / 40)) }).map((_, i) => (
+                            <img
+                              key={i}
+                              src={thumb}
+                              className="h-full object-cover flex-shrink-0 opacity-70"
+                              style={{ width: Math.min(40, dur * pps) }}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center">
+                          <i className="fas fa-image text-white/10 text-lg"></i>
+                        </div>
+                      )}
+
+                      {/* Overlay */}
+                      <div className="absolute inset-0 bg-black/30" />
+
+                      {/* Duration badge */}
+                      <div className="absolute bottom-1 left-1.5 text-[6px] font-mono text-white/70 bg-black/50 px-1 rounded z-10">
+                        {dur.toFixed(1)}s
+                      </div>
+
+                      {/* Scene number */}
+                      <div className="absolute top-1 left-1.5 text-[6px] font-black text-white/50 z-10">
+                        {scenes.indexOf(scene) + 1}
+                      </div>
+
+                      {/* Remove button */}
+                      {scenes.length > 1 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onRemoveScene(scene.id); }}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20"
+                        >
+                          <i className="fas fa-times text-[7px] text-white"></i>
+                        </button>
+                      )}
+
+                      {/* Left trim handle */}
+                      <div
+                        onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, scene.id, 'visual', 'resize-left', dur); }}
+                        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-all z-20 flex items-center justify-center hover:bg-cyan-400/30"
+                      >
+                        <div className="w-px h-6 bg-cyan-400/60 rounded-full" />
+                      </div>
+
+                      {/* Right trim handle */}
+                      <div
+                        onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, scene.id, 'visual', 'resize-right', dur); }}
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-all z-20 flex items-center justify-center hover:bg-cyan-400/30"
+                      >
+                        <div className="w-px h-6 bg-cyan-400/60 rounded-full" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </TrackRow>
+
+              {/* ══ VOICE TRACK ══ */}
+              <TrackRow label="Voice" icon="fa-microphone-lines" iconColor="text-amber-400">
+                {scenes.map(scene => {
+                  const dur = scene.narrationDuration || scene.duration || defaultDuration;
+                  const hasAudio = !!scene.narrationAudioUrl;
+                  const isActive = activeSceneId === scene.id;
+
+                  return (
+                    <div
+                      key={`v-${scene.id}`}
+                      className={`relative group h-10 rounded-lg border overflow-hidden shrink-0 transition-all cursor-pointer ${
+                        isActive
+                          ? 'border-amber-400/60 bg-amber-500/10'
+                          : 'border-white/10 bg-white/3 hover:border-white/20'
+                      }`}
+                      style={{ width: dur * pps, minWidth: 28 }}
+                      onClick={() => onSelectScene(scene.id)}
+                    >
+                      {/* Waveform visualization */}
+                      {hasAudio ? (
+                        <div className="absolute inset-0 flex items-center px-1 gap-px">
+                          {Array.from({ length: Math.max(4, Math.floor(dur * pps / 4)) }).map((_, i) => {
+                            const h = 20 + Math.sin(i * 0.8) * 12 + Math.cos(i * 1.3) * 8;
+                            return (
+                              <div
+                                key={i}
+                                className="flex-1 bg-amber-400/60 rounded-full"
+                                style={{ height: `${Math.max(10, Math.min(80, h))}%` }}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <button
+                            onClick={e => { e.stopPropagation(); onBakeNarration(scene.id); }}
+                            className="text-[7px] font-black uppercase text-slate-600 hover:text-amber-400 transition-all flex items-center gap-1"
                           >
-                            <i className={`fas ${scene.narrationAudioUrl ? 'fa-play' : 'fa-plus'} text-[8px]`}></i>
+                            <i className="fas fa-plus text-[8px]"></i>
+                            {dur * pps > 50 ? 'Add Voice' : '+'}
                           </button>
                         </div>
-                        
-                        <div onMouseDown={(e) => handleMouseDown(e, scene.id, 'narration', 'resize-right', dur)} className="absolute right-0 top-0 bottom-0 w-2 hover:bg-amber-500/60 cursor-ew-resize transition-all z-20 flex items-center justify-center">
-                           <div className="w-[1px] h-3 bg-amber-500/40 rounded-full"></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-               </div>
-            </div>
+                      )}
 
-            {/* Extra Tracks */}
-            <div className="flex flex-col gap-2">
-              {[0, 1].map((trackIndex) => (
-                <div className="flex items-center gap-3" key={`track-${trackIndex}`}>
-                  <div className="w-16 shrink-0 text-[6px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-                    <i className={`fas ${trackIndex === 0 ? 'fa-music' : 'fa-bolt-lightning'} text-[8px]`}></i> {trackIndex === 0 ? 'Score' : `FX`}
-                  </div>
-                  <div className="h-8 relative flex-1 bg-black/40 rounded-lg border border-white/5" style={{ width: `${Math.max(totalProjectDuration, 15) * PIXELS_PER_SECOND + 100}px` }}>
-                    <button onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left;
-                        onAddGlobalClip(trackIndex, clickX / PIXELS_PER_SECOND);
-                      }}
-                      className="absolute inset-0 z-0 hover:bg-white/5 cursor-crosshair transition-all rounded-lg"
-                    />
-                    {extraTracks[trackIndex].map((clip) => (
-                      <div 
-                        key={clip.id}
-                        className={`absolute group h-full border rounded-lg flex items-center px-3 cursor-move transition-all
-                          ${clip.type === 'music' ? 'bg-[#4c1d95]/40 border-[#7c3aed]/50 text-white' : 'bg-[#1e293b]/60 border-[#334155] text-slate-300'}
-                        `}
-                        style={{ left: `${clip.startTime * PIXELS_PER_SECOND}px`, width: `${clip.duration * PIXELS_PER_SECOND}px`, minWidth: '30px' }}
-                        onMouseDown={(e) => handleMouseDown(e, clip.id, 'extra', 'move', clip.duration, clip.startTime, trackIndex)}
-                      >
-                        <div onMouseDown={(e) => handleMouseDown(e, clip.id, 'extra', 'resize-left', clip.duration, clip.startTime, trackIndex)} className="absolute left-0 top-0 bottom-0 w-2 hover:bg-white/10 cursor-ew-resize z-20 opacity-0 group-hover:opacity-100"></div>
-                        
-                        <div className="flex items-center gap-1 truncate pointer-events-none scale-90">
-                          <span className="text-[6px] font-black truncate uppercase">{clip.content}</span>
-                        </div>
-                        
-                        <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemoveGlobalClip(trackIndex, clip.id); }} className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-red-600/90 text-white w-4 h-4 rounded-full flex items-center justify-center text-[7px] z-30 border border-white/10 scale-75">
-                          <i className="fas fa-times"></i>
+                      {/* Play button if has audio */}
+                      {hasAudio && (
+                        <button
+                          onClick={e => { e.stopPropagation(); onPreviewNarration(scene.narrationAudioUrl!); }}
+                          className="absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10"
+                        >
+                          <i className="fas fa-play text-[6px] text-amber-400"></i>
                         </button>
+                      )}
 
-                        <div onMouseDown={(e) => handleMouseDown(e, clip.id, 'extra', 'resize-right', clip.duration, clip.startTime, trackIndex)} className="absolute right-0 top-0 bottom-0 w-2 hover:bg-white/10 cursor-ew-resize z-20"></div>
+                      {/* Left trim */}
+                      <div
+                        onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, scene.id, 'narration', 'resize-left', dur); }}
+                        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 z-20 flex items-center justify-center hover:bg-amber-400/20"
+                      >
+                        <div className="w-px h-4 bg-amber-400/50 rounded-full" />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
 
+                      {/* Right trim */}
+                      <div
+                        onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, scene.id, 'narration', 'resize-right', dur); }}
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 z-20 flex items-center justify-center hover:bg-amber-400/20"
+                      >
+                        <div className="w-px h-4 bg-amber-400/50 rounded-full" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </TrackRow>
+
+              {/* ══ SCORE + FX TRACKS ══ */}
+              {[0, 1].map(trackIdx => {
+                const trackColor = trackIdx === 0 ? 'text-purple-400' : 'text-blue-400';
+                const clipColor = trackIdx === 0
+                  ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                  : 'bg-blue-500/20 border-blue-500/40 text-blue-300';
+                const label = trackIdx === 0 ? 'Score' : 'FX';
+                const icon = trackIdx === 0 ? 'fa-music' : 'fa-bolt-lightning';
+
+                return (
+                  <div key={`track-${trackIdx}`} className="flex items-center" style={{ height: 36 }}>
+                    {/* Label */}
+                    <div
+                      style={{ width: LABEL_WIDTH, flexShrink: 0 }}
+                      className={`flex items-center gap-1.5 px-2 ${trackColor}`}
+                    >
+                      <i className={`fas ${icon} text-[8px]`}></i>
+                      <span className="text-[7px] font-black uppercase tracking-wider opacity-70">{label}</span>
+                    </div>
+
+                    {/* Track area */}
+                    <div
+                      className="relative h-full bg-white/2 rounded border border-white/5"
+                      style={{ width: Math.max(totalProjectDuration, 15) * pps + 120 }}
+                      onClick={e => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        onAddGlobalClip(trackIdx, x / pps);
+                      }}
+                    >
+                      {extraTracks[trackIdx]?.map(clip => (
+                        <div
+                          key={clip.id}
+                          className={`absolute top-1 bottom-1 rounded-lg border flex items-center px-2 cursor-grab group transition-all ${clipColor}`}
+                          style={{ left: clip.startTime * pps, width: Math.max(30, clip.duration * pps) }}
+                          onMouseDown={e => handleMouseDown(e, clip.id, 'extra', 'move', clip.duration, clip.startTime, trackIdx)}
+                        >
+                          {/* Waveform for audio clips */}
+                          {clip.audioUrl && (
+                            <div className="absolute inset-0 flex items-center px-1 gap-px overflow-hidden">
+                              {Array.from({ length: Math.max(3, Math.floor(clip.duration * pps / 5)) }).map((_, i) => (
+                                <div key={i} className="flex-1 bg-current opacity-30 rounded-full" style={{ height: `${30 + Math.sin(i) * 20}%` }} />
+                              ))}
+                            </div>
+                          )}
+
+                          <span className="text-[6px] font-black uppercase truncate relative z-10 opacity-80">{clip.content}</span>
+
+                          {/* Remove */}
+                          <button
+                            onMouseDown={e => e.stopPropagation()}
+                            onClick={e => { e.stopPropagation(); onRemoveGlobalClip(trackIdx, clip.id); }}
+                            className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20"
+                          >
+                            <i className="fas fa-times text-[6px] text-white"></i>
+                          </button>
+
+                          {/* Left trim */}
+                          <div
+                            onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, clip.id, 'extra', 'resize-left', clip.duration, clip.startTime, trackIdx); }}
+                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/10 z-10"
+                          />
+                          {/* Right trim */}
+                          <div
+                            onMouseDown={e => { e.stopPropagation(); handleMouseDown(e, clip.id, 'extra', 'resize-right', clip.duration, clip.startTime, trackIdx); }}
+                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/10 z-10"
+                          />
+                        </div>
+                      ))}
+
+                      {/* Add hint */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                        <span className="text-[7px] text-white/20 uppercase tracking-widest">Click to add</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            </div>
           </div>
         </div>
       )}
@@ -420,5 +583,25 @@ onOpenFrameEditor()
   );
 };
 
-export default Timeline;
+// ── Reusable track row ──
+const TrackRow: React.FC<{
+  label: string;
+  icon: string;
+  iconColor: string;
+  children: React.ReactNode;
+}> = ({ label, icon, iconColor, children }) => (
+  <div className="flex items-center" style={{ minHeight: 60 }}>
+    <div
+      style={{ width: LABEL_WIDTH, flexShrink: 0 }}
+      className={`flex flex-col items-center justify-center gap-1 py-2 ${iconColor}`}
+    >
+      <i className={`fas ${icon} text-[9px]`}></i>
+      <span className="text-[6px] font-black uppercase tracking-wider opacity-60">{label}</span>
+    </div>
+    <div className="flex items-center gap-1 flex-1 h-full py-1">
+      {children}
+    </div>
+  </div>
+);
 
+export default Timeline;
