@@ -1,3 +1,4 @@
+
 import { Project, Scene } from "../types"
 import { buildImage } from "../engine/mediaEngine"
 // ── fetchStockImages kept for non-KnowIt stock channels ──
