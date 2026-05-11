@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Scene, Project, ProjectStatus, CaptionConfig, VoiceSettings,
