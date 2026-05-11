@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Scene, Project, ProjectStatus, CaptionConfig, VoiceSettings,
@@ -18,23 +19,59 @@ import { generateSceneVideo } from "./controllers/mediaController";
 import { analyzeEntities } from "./engine/entityAnalyzer";
 import { mapCharactersToScenes } from "./engine/sceneCharacterMapper";
 
-// ── Electron API type (only available when running as desktop app) ──
+// ─────────────────────────────────────────────────────────────
+// PLATFORM DETECTION
+// The same React code runs in three environments:
+//   1. Web / Vercel  → normal browser, modals + window.open
+//   2. Electron      → desktop app, real embedded browser panel (right half of window)
+//   3. Capacitor     → Android / iOS app, in-app browser sheet
+// Each handler checks the platform and takes the right path.
+// ─────────────────────────────────────────────────────────────
+
+// ── Electron (desktop) ───────────────────────────────────────
 declare global {
   interface Window {
     electronAPI?: {
-      isElectron: true;
-      openBridge:     (url: string)  => Promise<{ ok: boolean }>;
-      hideBridge:     ()             => Promise<{ ok: boolean }>;
-      navigateBridge: (url: string)  => Promise<{ ok: boolean }>;
-      goBack:         ()             => Promise<void>;
-      goForward:      ()             => Promise<void>;
-      reload:         ()             => Promise<void>;
-      onDownload:     (cb: (data: { filename: string; mimeType: string; base64: string }) => void) => void;
-      onNavigated:    (cb: (url: string) => void) => void;
-      removeAllBridgeListeners: () => void;
+      isElectron:               true;
+      openBridge:               (url: string) => Promise<{ ok: boolean }>;
+      hideBridge:               ()            => Promise<{ ok: boolean }>;
+      goBack:                   ()            => Promise<void>;
+      goForward:                ()            => Promise<void>;
+      reload:                   ()            => Promise<void>;
+      onDownload:               (cb: (data: { filename: string; mimeType: string; base64: string }) => void) => void;
+      onNavigated:              (cb: (url: string) => void) => void;
+      removeAllBridgeListeners: ()            => void;
     };
   }
 }
+
+// ── Capacitor (Android / iOS) ─────────────────────────────────
+// isCapacitorApp is true only when running inside the installed Android/iOS app.
+// It is false in every browser (Vercel, localhost, Electron).
+const isCapacitorApp = (): boolean =>
+  typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
+
+// Opens the in-app browser sheet on mobile.
+// Uses a dynamic import so the web/Electron builds never fail even
+// if @capacitor-community/inappbrowser is not installed yet.
+const openCapacitorBrowser = async (url: string, title: string) => {
+  try {
+    const { InAppBrowser } = await import('@capacitor-community/inappbrowser');
+    await InAppBrowser.openWebView({
+      url,
+      toolbarColor:    '#0a0a0f',
+      title,
+      closeButtonText: 'Done  ✓',
+      showArrow:       true,
+      showReloadButton: true,
+    });
+    return InAppBrowser;
+  } catch {
+    // Fallback: just open in the system browser if plugin isn't ready
+    window.open(url, '_blank');
+    return null;
+  }
+};
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
@@ -123,21 +160,25 @@ const App: React.FC = () => {
   const [imageProvider, setImageProvider] = useState<'gemini' | 'flow' | 'wix'>('gemini');
   const [videoMode, setVideoMode] = useState<VideoMode>('velocity');
 
-  // ── Bridge state ──
-  // In Electron: bridge opens as a real embedded browser panel (right 50% of window)
-  // In web/Vercel: bridge falls back to the original modal + window.open flow
-  const [isBridgeOpen, setIsBridgeOpen] = useState(false);
-  const [bridgeMode, setBridgeMode] = useState<'flow' | 'hunyuan'>('flow');
-  const [isFlowBridgeOpen, setIsFlowBridgeOpen] = useState(false);       // web fallback
-  const [flowBridgePrompt, setFlowBridgePrompt] = useState('');
-  const [flowBridgeCopied, setFlowBridgeCopied] = useState(false);
+  // ── Bridge state ─────────────────────────────────────────────
+  // Shared
+  const [isBridgeOpen,      setIsBridgeOpen]      = useState(false);
+  const [bridgeMode,        setBridgeMode]         = useState<'flow' | 'hunyuan'>('flow');
+  const [bridgeAutoImported,setBridgeAutoImported] = useState(false);
+  const [bridgeCurrentUrl,  setBridgeCurrentUrl]   = useState('');
+  // Flow
+  const [isFlowBridgeOpen,  setIsFlowBridgeOpen]  = useState(false); // web fallback only
+  const [flowBridgePrompt,  setFlowBridgePrompt]  = useState('');
+  const [flowBridgeCopied,  setFlowBridgeCopied]  = useState(false);
   const [flowBridgeSceneId, setFlowBridgeSceneId] = useState<string | null>(null);
-  const [isHunyuanBridgeOpen, setIsHunyuanBridgeOpen] = useState(false); // web fallback
-  const [hunyuanBridgePrompt, setHunyuanBridgePrompt] = useState('');
-  const [hunyuanBridgeCopied, setHunyuanBridgeCopied] = useState(false);
-  const [hunyuanImportUrl, setHunyuanImportUrl] = useState('');
-  const [bridgeAutoImported, setBridgeAutoImported] = useState(false);
-  const [bridgeCurrentUrl, setBridgeCurrentUrl] = useState('');
+  // Hunyuan
+  const [isHunyuanBridgeOpen,  setIsHunyuanBridgeOpen]  = useState(false); // web fallback only
+  const [hunyuanBridgePrompt,  setHunyuanBridgePrompt]  = useState('');
+  const [hunyuanBridgeCopied,  setHunyuanBridgeCopied]  = useState(false);
+  const [hunyuanImportUrl,     setHunyuanImportUrl]      = useState('');
+  // Mobile (Capacitor) — show file-picker after the in-app browser closes
+  const [showMobileImport,  setShowMobileImport]  = useState(false);
+
 
   const [activeTab, setActiveTab] = useState<AppTab>('story');
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -192,46 +233,54 @@ const App: React.FC = () => {
   const projectRef = useRef<Project>(project);
   useEffect(() => { projectRef.current = project; }, [project]);
 
-  // ── Electron bridge: auto-import downloaded files into the active scene ──
+  // ── ELECTRON: auto-import downloaded files into the active scene ──────────
   useEffect(() => {
     if (!window.electronAPI?.isElectron) return;
 
-    window.electronAPI.onDownload((data) => {
-      const { base64, mimeType } = data;
+    window.electronAPI.onDownload(({ base64, mimeType }) => {
       const dataUrl = `data:${mimeType};base64,${base64}`;
+      const proj    = projectRef.current;
 
       if (bridgeMode === 'flow' && flowBridgeSceneId) {
         updateScene(flowBridgeSceneId, {
-          frames: [{
-            id: 'frame-flow-' + Date.now(),
-            index: 0,
-            imageUrl: dataUrl,
-            options: [dataUrl],
-            duration: projectRef.current.sceneDuration,
-            type: 'ai' as const
-          }],
-          status: 'ready'
+          frames: [{ id: 'frame-' + Date.now(), index: 0, imageUrl: dataUrl,
+                     options: [dataUrl], duration: proj.sceneDuration, type: 'ai' as const }],
+          status: 'ready',
         }, true);
-        setBridgeAutoImported(true);
-        setTimeout(() => setBridgeAutoImported(false), 5000);
       } else if (bridgeMode === 'hunyuan') {
-        const sceneId = projectRef.current.activeSceneId ?? projectRef.current.scenes[0]?.id;
-        if (sceneId) {
-          updateScene(sceneId, { videoUrl: dataUrl, status: 'ready' }, true);
-          setBridgeAutoImported(true);
-          setTimeout(() => setBridgeAutoImported(false), 5000);
-        }
+        const sid = proj.activeSceneId ?? proj.scenes[0]?.id;
+        if (sid) updateScene(sid, { videoUrl: dataUrl, status: 'ready' }, true);
       }
+      setBridgeAutoImported(true);
+      setTimeout(() => setBridgeAutoImported(false), 5000);
     });
 
-    window.electronAPI.onNavigated((url) => {
-      setBridgeCurrentUrl(url);
-    });
+    window.electronAPI.onNavigated(url => setBridgeCurrentUrl(url));
 
     return () => window.electronAPI?.removeAllBridgeListeners();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridgeMode, flowBridgeSceneId]);
 
- = useCallback(() => {
+  // ── CAPACITOR: listen for in-app browser close → show file picker ─────────
+  useEffect(() => {
+    if (!isCapacitorApp() || !isBridgeOpen) return;
+    let removeListener: (() => void) | null = null;
+
+    (async () => {
+      try {
+        const { InAppBrowser } = await import('@capacitor-community/inappbrowser');
+        const handle = await InAppBrowser.addListener('browserClosed', () => {
+          setIsBridgeOpen(false);
+          setShowMobileImport(true);
+        });
+        removeListener = () => handle.remove();
+      } catch { /* plugin not available in web */ }
+    })();
+
+    return () => { removeListener?.(); };
+  }, [isBridgeOpen]);
+
+  const saveToHistory = useCallback(() => {
     setHistoryPast(prev => { const n = [...prev, projectRef.current]; return n.length > 50 ? n.slice(1) : n; });
     setHistoryFuture([]);
   }, []);
@@ -619,26 +668,37 @@ const App: React.FC = () => {
     const scene = project.scenes.find(s => s.id === id);
     if (!scene) return;
     const isKnowIt = project.channelId === 'knowit3d';
+
     if (isKnowIt) {
       const shotType = (scene as any).shotTypeHint || 'type-a';
       const { imagePrompt } = buildBridgePrompts(scene, project, shotType);
       setFlowBridgePrompt(imagePrompt);
       setFlowBridgeSceneId(id);
       setFlowBridgeCopied(false);
+      setBridgeMode('flow');
+      setBridgeAutoImported(false);
 
       if (window.electronAPI?.isElectron) {
-        // ── ELECTRON: open real embedded browser, auto-copy prompt ──
-        setBridgeMode('flow');
-        setBridgeAutoImported(false);
+        // ── DESKTOP: real embedded browser in right half of window ──
         setIsBridgeOpen(true);
-        await navigator.clipboard.writeText(imagePrompt).catch(() => {});
+        setBridgeCurrentUrl('https://labs.google/fx/tools/image-fx');
+        navigator.clipboard.writeText(imagePrompt).catch(() => {});
         window.electronAPI.openBridge('https://labs.google/fx/tools/image-fx');
+
+      } else if (isCapacitorApp()) {
+        // ── MOBILE (Android / iOS): in-app browser sheet ──
+        setIsBridgeOpen(true);
+        setShowMobileImport(false);
+        navigator.clipboard.writeText(imagePrompt).catch(() => {});
+        openCapacitorBrowser('https://labs.google/fx/tools/image-fx', '⬡ Flow — Image Bridge');
+
       } else {
-        // ── WEB FALLBACK: original modal ──
+        // ── WEB (Vercel / localhost): original modal + window.open ──
         setIsFlowBridgeOpen(true);
       }
       return;
     }
+
     setProjectStatus(ProjectStatus.GENERATING_IMAGE);
     try {
       const result = await generateSceneImage(scene, project, mediaMode, imageProvider);
@@ -646,7 +706,8 @@ const App: React.FC = () => {
       updateScene(id, { frames: result.frames, clips: result.clips, status: 'ready' });
       setProjectStatus(ProjectStatus.IDLE);
     } catch (err: any) {
-      console.error(err); alert(err?.message || 'Image generation error');
+      console.error(err);
+      alert(err?.message || 'Image generation error');
       setProjectStatus(ProjectStatus.ERROR);
     }
   };
@@ -658,10 +719,13 @@ const App: React.FC = () => {
     reader.onload = ev => {
       const dataUrl = ev.target?.result as string;
       updateScene(flowBridgeSceneId, {
-        frames: [{ id: 'frame-flow-' + Date.now(), index: 0, imageUrl: dataUrl, options: [dataUrl], duration: project.sceneDuration, type: 'ai' }],
-        status: 'ready'
+        frames: [{ id: 'frame-flow-' + Date.now(), index: 0, imageUrl: dataUrl,
+                   options: [dataUrl], duration: project.sceneDuration, type: 'ai' }],
+        status: 'ready',
       }, true);
       setIsFlowBridgeOpen(false);
+      setShowMobileImport(false);
+      setIsBridgeOpen(false);
     };
     reader.readAsDataURL(file);
   };
@@ -673,16 +737,25 @@ const App: React.FC = () => {
     setHunyuanBridgePrompt(videoPrompt);
     setHunyuanBridgeCopied(false);
     setHunyuanImportUrl('');
+    setBridgeMode('hunyuan');
+    setBridgeAutoImported(false);
 
     if (window.electronAPI?.isElectron) {
-      // ── ELECTRON: open real embedded browser, auto-copy prompt ──
-      setBridgeMode('hunyuan');
-      setBridgeAutoImported(false);
+      // ── DESKTOP: real embedded browser in right half of window ──
       setIsBridgeOpen(true);
-      await navigator.clipboard.writeText(videoPrompt).catch(() => {});
+      setBridgeCurrentUrl('https://aistudio.tencent.com/visual');
+      navigator.clipboard.writeText(videoPrompt).catch(() => {});
       window.electronAPI.openBridge('https://aistudio.tencent.com/visual');
+
+    } else if (isCapacitorApp()) {
+      // ── MOBILE (Android / iOS): in-app browser sheet ──
+      setIsBridgeOpen(true);
+      setShowMobileImport(false);
+      navigator.clipboard.writeText(videoPrompt).catch(() => {});
+      openCapacitorBrowser('https://aistudio.tencent.com/visual', '⬡ Hunyuan — Video Bridge');
+
     } else {
-      // ── WEB FALLBACK: original modal ──
+      // ── WEB: original modal ──
       setIsHunyuanBridgeOpen(true);
     }
   };
@@ -698,6 +771,8 @@ const App: React.FC = () => {
     if (!file) return;
     updateScene(activeSceneId, { videoUrl: URL.createObjectURL(file), status: 'ready' }, true);
     setIsHunyuanBridgeOpen(false);
+    setShowMobileImport(false);
+    setIsBridgeOpen(false);
   };
 
   const handleGenerateVideo = async (id: string) => {
@@ -998,91 +1073,162 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* FLOW BRIDGE MODAL */}
-      {/* ═══════════════════════════════════════════════════
-          ELECTRON BRIDGE STATUS PANEL
-          Only visible when running as the desktop app.
-          The real browser lives in the RIGHT 50% of the window
-          (controlled by Electron main process). This panel
-          sits on the LEFT side and shows controls + auto-import.
-      ════════════════════════════════════════════════════ */}
+
+      {/* ═══════════════════════════════════════════════════════
+          ELECTRON BRIDGE PANEL  (desktop app only)
+          The real browser lives in the RIGHT 50% of the window,
+          controlled by electron/main.cjs.  This floating card
+          sits on the LEFT side and gives you controls + status.
+      ════════════════════════════════════════════════════════ */}
       {isBridgeOpen && window.electronAPI?.isElectron && (
-        <div className="fixed bottom-[200px] right-[52%] z-[200] w-72">
+        <div className="fixed bottom-52 right-[52%] z-[200] w-72 pointer-events-auto">
           <div className="bg-[#0c0c12] border border-white/15 rounded-2xl p-4 shadow-2xl space-y-3">
 
-            {/* Header */}
+            {/* header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full animate-pulse ${bridgeMode === 'flow' ? 'bg-blue-400' : 'bg-purple-400'}`} />
-                <span className="text-[9px] font-black uppercase tracking-widest text-white">
+                <span className="text-[9px] font-black uppercase tracking-widest">
                   {bridgeMode === 'flow' ? '⬡ Flow Image Bridge' : '⬡ Hunyuan Video Bridge'}
                 </span>
               </div>
               <button
                 onClick={() => { window.electronAPI!.hideBridge(); setIsBridgeOpen(false); }}
-                className="text-slate-500 hover:text-white transition-colors text-xs"
+                className="text-slate-500 hover:text-white transition-colors"
               >✕</button>
             </div>
 
-            {/* Current URL */}
+            {/* current URL */}
             {bridgeCurrentUrl && (
               <p className="text-[8px] text-slate-600 font-mono truncate">{bridgeCurrentUrl}</p>
             )}
 
-            {/* Prompt preview */}
+            {/* prompt */}
             <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-24 overflow-y-auto">
               <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">
-                {bridgeMode === 'flow' ? 'Image Prompt' : 'Motion Prompt'}
+                {bridgeMode === 'flow' ? 'Image Prompt (already copied)' : 'Motion Prompt (already copied)'}
               </p>
               <p className="text-[9px] text-slate-400 leading-relaxed font-mono">
                 {bridgeMode === 'flow' ? flowBridgePrompt : hunyuanBridgePrompt}
               </p>
             </div>
 
-            {/* Copy prompt again */}
+            {/* copy again */}
             <button
-              onClick={async () => {
-                const prompt = bridgeMode === 'flow' ? flowBridgePrompt : hunyuanBridgePrompt;
-                await navigator.clipboard.writeText(prompt).catch(() => {});
+              onClick={() => {
+                const p = bridgeMode === 'flow' ? flowBridgePrompt : hunyuanBridgePrompt;
+                navigator.clipboard.writeText(p).catch(() => {});
                 setFlowBridgeCopied(true);
                 setTimeout(() => setFlowBridgeCopied(false), 2000);
               }}
-              className={`w-full py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${flowBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+              className={`w-full py-2 rounded-xl text-[9px] font-black uppercase border transition-all
+                ${flowBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
             >
               {flowBridgeCopied ? '✓ Copied!' : '⎘ Copy Prompt Again'}
             </button>
 
-            {/* Browser nav controls */}
+            {/* browser nav controls */}
             <div className="grid grid-cols-3 gap-1">
-              <button onClick={() => window.electronAPI!.goBack()}    className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[9px] text-slate-400 transition-all">← Back</button>
-              <button onClick={() => window.electronAPI!.reload()}    className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[9px] text-slate-400 transition-all">↺ Reload</button>
-              <button onClick={() => window.electronAPI!.goForward()} className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[9px] text-slate-400 transition-all">Forward →</button>
+              {[
+                { label: '← Back',    fn: () => window.electronAPI!.goBack() },
+                { label: '↺ Reload',  fn: () => window.electronAPI!.reload() },
+                { label: 'Fwd →',     fn: () => window.electronAPI!.goForward() },
+              ].map(({ label, fn }) => (
+                <button key={label} onClick={fn}
+                  className="py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[8px] text-slate-400 transition-all">
+                  {label}
+                </button>
+              ))}
             </div>
 
-            {/* Auto-import status */}
+            {/* auto-import status */}
             {bridgeAutoImported ? (
               <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2">
-                <span className="text-green-400 text-sm">✓</span>
-                <span className="text-[9px] font-black text-green-400 uppercase tracking-widest">
-                  Auto-imported to scene!
-                </span>
+                <span className="text-green-400">✓</span>
+                <span className="text-[9px] font-black text-green-400 uppercase tracking-widest">Auto-imported to scene!</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
                 <span className="text-slate-500 text-xs">⬇</span>
                 <span className="text-[8px] text-slate-500 uppercase tracking-widest">
-                  Download in the browser → auto-imports here
+                  Download in the browser → imports automatically
                 </span>
               </div>
             )}
-
           </div>
         </div>
       )}
 
-      {/* ─── WEB FALLBACK MODALS (non-Electron only) ─── */}
+      {/* ═══════════════════════════════════════════════════════
+          MOBILE IMPORT PANEL  (Capacitor Android / iOS only)
+          After the in-app browser closes the user taps here
+          to pick the image/video they just saved to the gallery.
+      ════════════════════════════════════════════════════════ */}
+      {showMobileImport && isCapacitorApp() && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#0c0c12] border border-white/15 rounded-[2rem] p-8 space-y-5">
 
-      {isFlowBridgeOpen && !window.electronAPI?.isElectron && (
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black uppercase tracking-widest">
+                  {bridgeMode === 'flow' ? 'Import Your Image' : 'Import Your Video'}
+                </h2>
+                <p className="text-[9px] text-slate-500 mt-1 uppercase tracking-widest">
+                  Pick the file you just downloaded
+                </p>
+              </div>
+              <button onClick={() => setShowMobileImport(false)} className="text-slate-500 hover:text-white">✕</button>
+            </div>
+
+            {/* prompt reminder */}
+            <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-20 overflow-y-auto">
+              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Your prompt was</p>
+              <p className="text-[9px] text-slate-400 font-mono leading-relaxed">
+                {bridgeMode === 'flow' ? flowBridgePrompt : hunyuanBridgePrompt}
+              </p>
+            </div>
+
+            {bridgeMode === 'flow' ? (
+              <label className="w-full py-6 bg-[#14141c] border-2 border-dashed border-blue-500/40
+                                rounded-2xl flex flex-col items-center gap-3 cursor-pointer
+                                hover:border-blue-400/70 active:scale-[0.98] transition-all">
+                <i className="fas fa-image text-3xl text-blue-400"></i>
+                <span className="text-[10px] font-black uppercase text-blue-300">Tap to pick image from gallery</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFlowImageUpload} />
+              </label>
+            ) : (
+              <>
+                <label className="w-full py-6 bg-[#14141c] border-2 border-dashed border-purple-500/40
+                                  rounded-2xl flex flex-col items-center gap-3 cursor-pointer
+                                  hover:border-purple-400/70 active:scale-[0.98] transition-all">
+                  <i className="fas fa-film text-3xl text-purple-400"></i>
+                  <span className="text-[10px] font-black uppercase text-purple-300">Tap to pick video from gallery</span>
+                  <input type="file" accept="video/*" className="hidden" onChange={handleHunyuanVideoUpload} />
+                </label>
+                <div className="flex gap-2">
+                  <input value={hunyuanImportUrl} onChange={e => setHunyuanImportUrl(e.target.value)}
+                    placeholder="Or paste video URL..."
+                    className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-[10px] outline-none focus:border-purple-500" />
+                  <button onClick={() => { if (!hunyuanImportUrl) return; updateScene(activeSceneId, { videoUrl: hunyuanImportUrl, status: 'ready' }, true); setShowMobileImport(false); }}
+                    disabled={!hunyuanImportUrl}
+                    className="px-5 py-3 bg-white text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-30">
+                    Import
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+          WEB FALLBACK MODALS  (Vercel / localhost only)
+          These show when running in a normal browser.
+          Electron and Capacitor never reach these blocks.
+      ════════════════════════════════════════════════════════ */}
+
+      {/* FLOW BRIDGE MODAL — web only */}
+      {isFlowBridgeOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
           <div className="w-full max-w-xl bg-[#0c0c12] border border-white/10 rounded-[2rem] p-10 shadow-2xl">
             <div className="flex justify-between items-center mb-5">
@@ -1097,10 +1243,12 @@ const App: React.FC = () => {
               <p className="text-[10px] text-slate-300 leading-relaxed font-mono">{flowBridgePrompt}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-5">
-              <button onClick={() => { navigator.clipboard.writeText(flowBridgePrompt); setFlowBridgeCopied(true); setTimeout(() => setFlowBridgeCopied(false), 3000); }} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${flowBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+              <button onClick={() => { navigator.clipboard.writeText(flowBridgePrompt); setFlowBridgeCopied(true); setTimeout(() => setFlowBridgeCopied(false), 3000); }}
+                className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${flowBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                 {flowBridgeCopied ? '✓ Copied!' : '⎘ Copy Prompt'}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(flowBridgePrompt); setFlowBridgeCopied(true); window.open('https://labs.google/fx/tools/image-fx', '_blank'); }} className="py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase transition-all">
+              <button onClick={() => { navigator.clipboard.writeText(flowBridgePrompt); setFlowBridgeCopied(true); window.open('https://labs.google/fx/tools/image-fx', '_blank'); }}
+                className="py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase transition-all">
                 Open Flow ↗
               </button>
             </div>
@@ -1115,8 +1263,8 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* HUNYUAN BRIDGE MODAL */}
-      {isHunyuanBridgeOpen && !window.electronAPI?.isElectron && (
+      {/* HUNYUAN BRIDGE MODAL — web only */}
+      {isHunyuanBridgeOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
           <div className="w-full max-w-xl bg-[#0c0c12] border border-white/10 rounded-[2rem] p-10 shadow-2xl">
             <div className="flex justify-between items-center mb-5">
@@ -1136,17 +1284,25 @@ const App: React.FC = () => {
               <p className="text-[10px] text-slate-300 leading-relaxed font-mono">{hunyuanBridgePrompt}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-5">
-              <button onClick={() => { navigator.clipboard.writeText(hunyuanBridgePrompt); setHunyuanBridgeCopied(true); setTimeout(() => setHunyuanBridgeCopied(false), 3000); }} className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${hunyuanBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+              <button onClick={() => { navigator.clipboard.writeText(hunyuanBridgePrompt); setHunyuanBridgeCopied(true); setTimeout(() => setHunyuanBridgeCopied(false), 3000); }}
+                className={`py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${hunyuanBridgeCopied ? 'bg-green-500 text-black border-green-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                 {hunyuanBridgeCopied ? '✓ Copied!' : '⎘ Copy Prompt'}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(hunyuanBridgePrompt); setHunyuanBridgeCopied(true); window.open('https://aistudio.tencent.com/visual', '_blank'); }} className="py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[9px] font-black uppercase transition-all">
+              <button onClick={() => { navigator.clipboard.writeText(hunyuanBridgePrompt); setHunyuanBridgeCopied(true); window.open('https://aistudio.tencent.com/visual', '_blank'); }}
+                className="py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[9px] font-black uppercase transition-all">
                 Open Hunyuan ↗
               </button>
             </div>
             <div className="border-t border-white/10 pt-5 space-y-3">
               <div className="flex gap-2">
-                <input value={hunyuanImportUrl} onChange={e => setHunyuanImportUrl(e.target.value)} placeholder="Paste video URL..." className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-[10px] outline-none focus:border-purple-500" />
-                <button onClick={handleHunyuanImport} disabled={!hunyuanImportUrl} className="px-5 py-3 bg-white text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-30">Import</button>
+                <input value={hunyuanImportUrl} onChange={e => setHunyuanImportUrl(e.target.value)}
+                  placeholder="Paste video URL..."
+                  className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-[10px] outline-none focus:border-purple-500" />
+                <button onClick={() => { if (!hunyuanImportUrl) return; updateScene(activeSceneId, { videoUrl: hunyuanImportUrl, status: 'ready' }, true); setIsHunyuanBridgeOpen(false); }}
+                  disabled={!hunyuanImportUrl}
+                  className="px-5 py-3 bg-white text-black rounded-xl text-[9px] font-black uppercase disabled:opacity-30">
+                  Import
+                </button>
               </div>
               <label className="w-full py-4 bg-[#14141c] border border-dashed border-white/20 rounded-xl flex flex-col items-center gap-1 cursor-pointer hover:border-purple-400/50 transition-all">
                 <i className="fas fa-cloud-arrow-up text-xl text-slate-500"></i>
