@@ -1008,7 +1008,15 @@ const App: React.FC = () => {
             );
           })}
         </div>
-        <button onClick={() => setAppMode('channels')} className="text-slate-500 text-xs mt-2 self-start hover:text-white transition-colors">← Back to Channels</button>
+        <div className="flex items-center justify-between mt-2">
+          <button onClick={() => setAppMode('channels')} className="text-slate-500 text-xs hover:text-white transition-colors">← Back to Channels</button>
+          <button
+            onClick={() => { setAutoTopic(''); setAppMode('editor'); }}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all"
+          >
+            Skip → Go to Editor
+          </button>
+        </div>
       </div>
     );
   }
