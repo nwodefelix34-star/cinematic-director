@@ -7,7 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env         = loadEnv(mode, '.', '');
   const buildTarget = process.env.VITE_BUILD_TARGET; // 'desktop' | 'mobile' | undefined
-  const base        = (buildTarget === 'desktop' || buildTarget === 'mobile') ? './' : '/';
+  const isMobile    = buildTarget === 'mobile';
+  const base        = (buildTarget === 'desktop' || isMobile) ? './' : '/';
 
   return {
     base,
@@ -31,6 +32,18 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
+    build: {
+      rollupOptions: {
+        // Capacitor packages only exist inside the Android/iOS app.
+        // Tell Rollup to ignore them on web and desktop builds.
+        external: isMobile ? [] : [
+          '@capacitor/core',
+          '@capacitor/android',
+          '@capacitor/ios',
+          '@capacitor-community/inappbrowser',
+        ],
+      },
+    },
     define: {
       'process.env.API_KEY':        JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
