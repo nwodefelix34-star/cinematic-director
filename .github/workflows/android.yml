@@ -1,31 +1,5 @@
-
-# ═══════════════════════════════════════════════════════════════
-# CINEMATIC DIRECTOR — ANDROID APK BUILD
-#
-# This workflow runs on GitHub's free cloud servers.
-# It builds your Android APK automatically so you never
-# need a computer.
-#
-# HOW TO TRIGGER A BUILD:
-#   1. Go to your GitHub repo
-#   2. Tap the "Actions" tab
-#   3. Tap "Build Android APK" on the left
-#   4. Tap "Run workflow" button → "Run workflow"
-#   5. Wait 10-15 minutes
-#   6. Tap the completed run → scroll down → download APK
-#
-# HOW TO INSTALL ON YOUR PHONE:
-#   1. Download the APK zip from GitHub
-#   2. Extract it — you get a .apk file
-#   3. Tap the .apk file on your phone
-#   4. Android asks "Allow install from unknown sources" → Allow
-#   5. App installs — done
-# ═══════════════════════════════════════════════════════════════
-
 name: Build Android APK
 
-# Manual trigger only — you press the button when you want a build.
-# This saves your free GitHub minutes (2000/month free).
 on:
   workflow_dispatch:
     inputs:
@@ -37,81 +11,74 @@ on:
 jobs:
   build-android:
     name: Build Android APK
-    runs-on: ubuntu-latest  # GitHub's free Linux server
+    runs-on: ubuntu-latest
 
     steps:
 
-      # ── Step 1: Get your code ─────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── Step 2: Set up Node.js (same version as your app) ─
-      - name: Set up Node.js
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
-      # ── Step 3: Set up Java (required for Android build) ──
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Step 4: Install your npm packages ─────────────────
-      - name: Install dependencies
-        run: npm install
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      # ── Step 5: Install Capacitor packages separately ─────
-      # These are optional deps so we install them explicitly
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
       - name: Install Capacitor packages
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npm install @capacitor-community/inappbrowser
+          npm install --legacy-peer-deps \
+            @capacitor/core \
+            @capacitor/cli \
+            @capacitor/android \
+            @capacitor-community/inappbrowser
 
-      # ── Step 6: Build the React app for mobile ────────────
-      - name: Build React app (mobile target)
-        run: npm run build
+      - name: Build React app for mobile
+        run: npx vite build
         env:
           VITE_BUILD_TARGET: mobile
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      # ── Step 7: Add Android platform if not already added ─
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
+          else
+            echo "Android platform already exists"
           fi
 
-      # ── Step 8: Sync built files into Android project ─────
       - name: Sync Capacitor
         run: npx cap sync android
 
-      # ── Step 9: Make Gradle executable ────────────────────
-      - name: Make Gradle wrapper executable
+      - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      # ── Step 10: Build the APK ────────────────────────────
       - name: Build debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # ── Step 11: Find the APK and rename it ───────────────
-      - name: Locate and rename APK
+      - name: Find and rename APK
         run: |
-          APK_PATH=$(find android -name "*.apk" | head -1)
+          APK_PATH=$(find android -name "*.apk" -not -path "*/intermediates/*" | head -1)
           echo "Found APK: $APK_PATH"
           cp "$APK_PATH" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
           echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
 
-      # ── Step 12: Upload APK so you can download it ────────
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: CinematicDirector-Android-v${{ github.event.inputs.version }}
           path: ${{ env.APK_FILE }}
-          retention-days: 30   # file stays downloadable for 30 days
+          retention-days: 30
