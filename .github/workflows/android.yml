@@ -33,66 +33,76 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Install Capacitor packages
+      - name: Install ALL dependencies including Capacitor
         run: |
+          npm install --legacy-peer-deps
           npm install --legacy-peer-deps \
-            @capacitor/core \
-            @capacitor/cli \
-            @capacitor/android \
+            @capacitor/core@6 \
+            @capacitor/cli@6 \
+            @capacitor/android@6 \
             @capacitor-community/inappbrowser
+          echo "✅ Dependencies installed"
+          npx cap --version
 
-      # ── This step compiles your entire React app ──────────
-      # Without this the APK only gets the empty shell
       - name: Build React app for mobile
-        run: npx vite build
+        run: |
+          npx vite build
+          echo "--- dist folder contents ---"
+          ls -lah dist/
+          echo "--- dist folder total size ---"
+          du -sh dist/
         env:
           VITE_BUILD_TARGET: mobile
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      # ── Add Android platform if first time ────────────────
+      - name: Verify dist is not empty
+        run: |
+          DIST_SIZE=$(du -sb dist/ | cut -f1)
+          echo "dist size in bytes: $DIST_SIZE"
+          if [ "$DIST_SIZE" -lt 100000 ]; then
+            echo "❌ dist folder is too small — React build failed"
+            exit 1
+          fi
+          echo "✅ dist folder looks good: $(du -sh dist/ | cut -f1)"
+
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
+            echo "✅ Android platform added"
           else
             echo "Android platform already exists"
           fi
 
-      # ── Copy compiled React files into Android assets ─────
-      # This is the critical step that was missing before.
-      # It takes your dist/ folder and puts it inside the APK.
-      - name: Sync Capacitor (copies dist into Android)
-        run: npx cap sync android
-
-      # ── Verify dist was actually copied in ────────────────
-      - name: Verify web assets were copied
+      - name: Sync Capacitor — copies dist into Android assets
         run: |
+          npx cap sync android
+          echo "--- checking assets after sync ---"
           if [ -d "android/app/src/main/assets/public" ]; then
-            echo "✅ Web assets found in Android project"
-            ls -la android/app/src/main/assets/public/ | head -10
+            echo "✅ Assets found:"
+            du -sh android/app/src/main/assets/public/
+            ls android/app/src/main/assets/public/
           else
-            echo "❌ Web assets NOT found - build will produce empty app"
-            exit 1
+            echo "❌ Assets folder missing — manually copying"
+            mkdir -p android/app/src/main/assets/public
+            cp -r dist/* android/app/src/main/assets/public/
+            echo "✅ Manually copied dist to assets"
+            du -sh android/app/src/main/assets/public/
           fi
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      # ── Build the APK ─────────────────────────────────────
       - name: Build debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Find and rename APK
+      - name: Check APK size
         run: |
           APK_PATH=$(find android -name "*.apk" -not -path "*/intermediates/*" | head -1)
-          echo "Found APK: $APK_PATH"
-          APK_SIZE=$(du -sh "$APK_PATH" | cut -f1)
-          echo "APK size: $APK_SIZE"
+          echo "APK path: $APK_PATH"
+          echo "APK size: $(du -sh $APK_PATH | cut -f1)"
           cp "$APK_PATH" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
           echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
 
