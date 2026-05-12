@@ -55,7 +55,7 @@ const isCapacitorApp = (): boolean =>
 // if @capacitor-community/inappbrowser is not installed yet.
 const openCapacitorBrowser = async (url: string, title: string) => {
   try {
-    const { InAppBrowser } = await import('@capacitor-community/inappbrowser');
+    const { InAppBrowser } = await import(/* @vite-ignore */ '@capacitor-community/inappbrowser');
     await InAppBrowser.openWebView({
       url,
       toolbarColor:    '#0a0a0f',
@@ -267,7 +267,7 @@ const App: React.FC = () => {
 
     (async () => {
       try {
-        const { InAppBrowser } = await import('@capacitor-community/inappbrowser');
+        const { InAppBrowser } = await import(/* @vite-ignore */ '@capacitor-community/inappbrowser');
         const handle = await InAppBrowser.addListener('browserClosed', () => {
           setIsBridgeOpen(false);
           setShowMobileImport(true);
@@ -1698,4 +1698,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
