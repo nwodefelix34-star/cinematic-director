@@ -33,7 +33,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install ALL dependencies including Capacitor
+      - name: Install dependencies
         run: |
           npm install --legacy-peer-deps
           npm install --legacy-peer-deps \
@@ -41,58 +41,54 @@ jobs:
             @capacitor/cli@6 \
             @capacitor/android@6 \
             @capacitor-community/inappbrowser
-          echo "Capacitor version: $(npx cap --version)"
 
-      - name: Build React app for mobile
+      - name: Build React app
         run: |
           npx vite build
-          echo "=== dist folder ==="
-          ls -lah dist/
-          echo "=== dist size ==="
+          echo "====== DIST CONTENTS ======"
+          find dist -type f | sort
+          echo "====== DIST SIZE ======"
           du -sh dist/
-          echo "=== index.html size ==="
-          wc -c dist/index.html
+          echo "====== DIST INDEX SIZE ======"
+          wc -c dist/index.html || echo "no index.html"
+          echo "====== ALL JS FILES IN DIST ======"
+          find dist -name "*.js" -exec du -sh {} \;
         env:
           VITE_BUILD_TARGET: mobile
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Add Android platform
-        run: npx cap add android
-
-      - name: FORCE copy dist into Android assets
         run: |
-          echo "=== Creating assets folder ==="
+          npx cap add android
+          echo "====== CAPACITOR CONFIG ======"
+          cat capacitor.config.ts || cat capacitor.config.json || echo "no cap config found"
+
+      - name: Force copy dist to Android assets
+        run: |
           mkdir -p android/app/src/main/assets/public
-          echo "=== Copying dist files ==="
           cp -rv dist/* android/app/src/main/assets/public/
-          echo "=== Assets folder after copy ==="
-          ls -lah android/app/src/main/assets/public/
-          echo "=== Assets size ==="
+          echo "====== ANDROID ASSETS CONTENTS ======"
+          find android/app/src/main/assets/public -type f | sort
+          echo "====== ANDROID ASSETS SIZE ======"
           du -sh android/app/src/main/assets/public/
 
-      - name: Run cap sync for native plugins only
+      - name: Sync Capacitor plugins
         run: npx cap sync android
-
-      - name: Confirm assets still there after sync
-        run: |
-          echo "=== Final assets check ==="
-          du -sh android/app/src/main/assets/public/
-          ls android/app/src/main/assets/public/
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Build debug APK
+      - name: Build APK
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon
 
-      - name: Check APK size and upload
+      - name: Report APK size
         run: |
-          APK_PATH=$(find android -name "app-debug.apk" | head -1)
-          echo "APK path: $APK_PATH"
-          echo "APK size: $(du -sh $APK_PATH | cut -f1)"
-          cp "$APK_PATH" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
+          APK=$(find android -name "app-debug.apk" | head -1)
+          echo "====== APK SIZE ======"
+          du -sh "$APK"
+          cp "$APK" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
           echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
 
       - name: Upload APK
