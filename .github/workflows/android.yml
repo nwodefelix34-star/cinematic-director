@@ -44,12 +44,15 @@ jobs:
             @capacitor/android \
             @capacitor-community/inappbrowser
 
+      # ── This step compiles your entire React app ──────────
+      # Without this the APK only gets the empty shell
       - name: Build React app for mobile
         run: npx vite build
         env:
           VITE_BUILD_TARGET: mobile
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
+      # ── Add Android platform if first time ────────────────
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
@@ -58,12 +61,27 @@ jobs:
             echo "Android platform already exists"
           fi
 
-      - name: Sync Capacitor
+      # ── Copy compiled React files into Android assets ─────
+      # This is the critical step that was missing before.
+      # It takes your dist/ folder and puts it inside the APK.
+      - name: Sync Capacitor (copies dist into Android)
         run: npx cap sync android
+
+      # ── Verify dist was actually copied in ────────────────
+      - name: Verify web assets were copied
+        run: |
+          if [ -d "android/app/src/main/assets/public" ]; then
+            echo "✅ Web assets found in Android project"
+            ls -la android/app/src/main/assets/public/ | head -10
+          else
+            echo "❌ Web assets NOT found - build will produce empty app"
+            exit 1
+          fi
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
+      # ── Build the APK ─────────────────────────────────────
       - name: Build debug APK
         run: |
           cd android
@@ -73,6 +91,8 @@ jobs:
         run: |
           APK_PATH=$(find android -name "*.apk" -not -path "*/intermediates/*" | head -1)
           echo "Found APK: $APK_PATH"
+          APK_SIZE=$(du -sh "$APK_PATH" | cut -f1)
+          echo "APK size: $APK_SIZE"
           cp "$APK_PATH" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
           echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
 
