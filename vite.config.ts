@@ -1,4 +1,3 @@
-
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -6,9 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env         = loadEnv(mode, '.', '');
-  const buildTarget = process.env.VITE_BUILD_TARGET; // 'desktop' | 'mobile' | undefined
-  const isMobile    = buildTarget === 'mobile';
-  const base        = (buildTarget === 'desktop' || isMobile) ? './' : '/';
+  const buildTarget = process.env.VITE_BUILD_TARGET;
+  const base        = (buildTarget === 'desktop' || buildTarget === 'mobile') ? './' : '/';
 
   return {
     base,
@@ -34,9 +32,11 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       rollupOptions: {
-        // Capacitor packages only exist inside the Android/iOS app.
-        // Tell Rollup to ignore them on web and desktop builds.
-        external: isMobile ? [] : [
+        // Capacitor packages are ALWAYS external — they are never bundled.
+        // On web/desktop: they don't exist and are not needed.
+        // On Android/iOS: they are provided by the native Capacitor shell,
+        // not through the npm bundle. The native layer injects them at runtime.
+        external: [
           '@capacitor/core',
           '@capacitor/android',
           '@capacitor/ios',
