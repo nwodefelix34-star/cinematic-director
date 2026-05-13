@@ -5,9 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env         = loadEnv(mode, '.', '');
-  const buildTarget = process.env.VITE_BUILD_TARGET; // 'desktop' | 'mobile' | undefined
-  const isMobile    = buildTarget === 'mobile';
-  const base        = (buildTarget === 'desktop' || isMobile) ? './' : '/';
+  const buildTarget = process.env.VITE_BUILD_TARGET;
+  const base        = (buildTarget === 'desktop' || buildTarget === 'mobile') ? './' : '/';
 
   const apiKey =
     process.env.GEMINI_API_KEY ||
@@ -40,15 +39,11 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       rollupOptions: {
-        // ── CRITICAL ──────────────────────────────────────────────────
-        // On MOBILE builds: do NOT externalize Capacitor packages.
-        // They must be bundled into the JS so the Android WebView can
-        // load them and bridge to native code (InAppBrowser etc.)
-        //
-        // On WEB / DESKTOP builds: externalize them — they don't exist
-        // in those environments and would cause build errors.
-        // ──────────────────────────────────────────────────────────────
-        external: isMobile ? [] : [
+        // Always externalize Capacitor packages across ALL builds.
+        // We no longer import them in the code — instead we access them
+        // via window.Capacitor.Plugins at runtime on Android/iOS.
+        // This means Rollup never tries to bundle them and never fails.
+        external: [
           '@capacitor/core',
           '@capacitor/android',
           '@capacitor/ios',
@@ -57,10 +52,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'import.meta.env.VITE_API_KEY':    JSON.stringify(apiKey),
-      'import.meta.env.GEMINI_API_KEY':  JSON.stringify(apiKey),
-      'process.env.API_KEY':             JSON.stringify(apiKey),
-      'process.env.GEMINI_API_KEY':      JSON.stringify(apiKey),
+      'import.meta.env.VITE_API_KEY':   JSON.stringify(apiKey),
+      'import.meta.env.GEMINI_API_KEY': JSON.stringify(apiKey),
+      'process.env.API_KEY':            JSON.stringify(apiKey),
+      'process.env.GEMINI_API_KEY':     JSON.stringify(apiKey),
     },
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
