@@ -54,19 +54,27 @@ const isCapacitorApp = (): boolean =>
 // Uses a dynamic import so the web/Electron builds never fail even
 // if @capacitor-community/inappbrowser is not installed yet.
 const openCapacitorBrowser = async (url: string, title: string) => {
+  // Access the InAppBrowser plugin via the Capacitor global bridge.
+  // This works on Android/iOS without any import — the plugin registers
+  // itself on window.Capacitor.Plugins when the native app loads.
+  // We never import the package, so Rollup never tries to bundle it.
   try {
-    const { InAppBrowser } = await import(/* @vite-ignore */ '@capacitor-community/inappbrowser');
-    await InAppBrowser.openWebView({
-      url,
-      toolbarColor:    '#0a0a0f',
-      title,
-      closeButtonText: 'Done  ✓',
-      showArrow:       true,
-      showReloadButton: true,
-    });
-    return InAppBrowser;
+    const InAppBrowser = (window as any).Capacitor?.Plugins?.InAppBrowser;
+    if (InAppBrowser?.openWebView) {
+      await InAppBrowser.openWebView({
+        url,
+        toolbarColor:     '#0a0a0f',
+        title,
+        closeButtonText:  'Done  ✓',
+        showArrow:        true,
+        showReloadButton: true,
+      });
+      return InAppBrowser;
+    }
+    // Plugin not available — fall back to system browser
+    window.open(url, '_blank');
+    return null;
   } catch {
-    // Fallback: just open in the system browser if plugin isn't ready
     window.open(url, '_blank');
     return null;
   }
@@ -267,7 +275,8 @@ const App: React.FC = () => {
 
     (async () => {
       try {
-        const { InAppBrowser } = await import(/* @vite-ignore */ '@capacitor-community/inappbrowser');
+        const InAppBrowser = (window as any).Capacitor?.Plugins?.InAppBrowser;
+        if (!InAppBrowser?.addListener) return;
         const handle = await InAppBrowser.addListener('browserClosed', () => {
           setIsBridgeOpen(false);
           setShowMobileImport(true);
