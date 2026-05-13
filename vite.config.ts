@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
   const buildTarget = process.env.VITE_BUILD_TARGET;
   const base        = (buildTarget === 'desktop' || buildTarget === 'mobile') ? './' : '/';
 
+  // Read API key from EITHER the .env file OR the system environment variable.
+  // This is critical for GitHub Actions where the key comes from a Secret,
+  // not a .env file. Without this the Android build has no API key and
+  // every Gemini call silently fails.
+  const apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+
   return {
     base,
     server: {
@@ -32,10 +38,6 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       rollupOptions: {
-        // Capacitor packages are ALWAYS external — they are never bundled.
-        // On web/desktop: they don't exist and are not needed.
-        // On Android/iOS: they are provided by the native Capacitor shell,
-        // not through the npm bundle. The native layer injects them at runtime.
         external: [
           '@capacitor/core',
           '@capacitor/android',
@@ -45,8 +47,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'process.env.API_KEY':        JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      // Hardcode the API key into the bundle at build time.
+      // Both variable names used across the codebase are covered.
+      'process.env.API_KEY':        JSON.stringify(apiKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
     },
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
