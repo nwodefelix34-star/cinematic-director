@@ -8,11 +8,17 @@ export default defineConfig(({ mode }) => {
   const buildTarget = process.env.VITE_BUILD_TARGET;
   const base        = (buildTarget === 'desktop' || buildTarget === 'mobile') ? './' : '/';
 
-  // Read API key from EITHER the .env file OR the system environment variable.
-  // This is critical for GitHub Actions where the key comes from a Secret,
-  // not a .env file. Without this the Android build has no API key and
-  // every Gemini call silently fails.
-  const apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+  // Read API key from any of the possible sources:
+  // - process.env.GEMINI_API_KEY  → GitHub Actions secret
+  // - process.env.VITE_API_KEY    → if someone named it that
+  // - env.VITE_API_KEY            → .env file locally
+  // - env.GEMINI_API_KEY          → .env file alternate name
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.VITE_API_KEY   ||
+    env.VITE_API_KEY            ||
+    env.GEMINI_API_KEY          ||
+    '';
 
   return {
     base,
@@ -47,10 +53,11 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Hardcode the API key into the bundle at build time.
-      // Both variable names used across the codebase are covered.
-      'process.env.API_KEY':        JSON.stringify(apiKey),
-      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
+      // Expose the key under EVERY name the codebase might use
+      'import.meta.env.VITE_API_KEY':    JSON.stringify(apiKey),
+      'import.meta.env.GEMINI_API_KEY':  JSON.stringify(apiKey),
+      'process.env.API_KEY':             JSON.stringify(apiKey),
+      'process.env.GEMINI_API_KEY':      JSON.stringify(apiKey),
     },
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
