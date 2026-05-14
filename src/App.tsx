@@ -50,16 +50,18 @@ declare global {
 const isCapacitorApp = (): boolean =>
   typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 
-// Opens the in-app browser sheet on mobile.
-// Uses a dynamic import so the web/Electron builds never fail even
-// if @capacitor-community/inappbrowser is not installed yet.
+// Opens an in-app browser on Android/iOS using a two-layer strategy:
+//   Layer 1 — @capacitor-community/inappbrowser  → true embedded WebView (no Chrome at all)
+//   Layer 2 — @capacitor/browser (official)       → Chrome Custom Tab (stays in-app, shares login)
+//   Layer 3 — window.open                         → last-resort fallback
+// Neither package is imported — both are accessed via window.Capacitor.Plugins at runtime
+// so Rollup never bundles them and the web/Electron builds stay clean.
 const openCapacitorBrowser = async (url: string, title: string) => {
-  // Access the InAppBrowser plugin via the Capacitor global bridge.
-  // This works on Android/iOS without any import — the plugin registers
-  // itself on window.Capacitor.Plugins when the native app loads.
-  // We never import the package, so Rollup never tries to bundle it.
   try {
-    const InAppBrowser = (window as any).Capacitor?.Plugins?.InAppBrowser;
+    const plugins = (window as any).Capacitor?.Plugins;
+
+    // ── Layer 1: Community InAppBrowser — true embedded WebView ──────────
+    const InAppBrowser = plugins?.InAppBrowser;
     if (InAppBrowser?.openWebView) {
       await InAppBrowser.openWebView({
         url,
@@ -69,9 +71,19 @@ const openCapacitorBrowser = async (url: string, title: string) => {
         showArrow:        true,
         showReloadButton: true,
       });
-      return InAppBrowser;
+      return { plugin: InAppBrowser, closeEvent: 'browserClosed' as const };
     }
-    // Plugin not available — fall back to system browser
+
+    // ── Layer 2: Official @capacitor/browser — Chrome Custom Tab ─────────
+    // Chrome Custom Tabs stay inside the app and share Chrome's cookies,
+    // so users remain logged in to ImageFX / Hunyuan automatically.
+    const Browser = plugins?.Browser;
+    if (Browser?.open) {
+      await Browser.open({ url, presentationStyle: 'fullscreen' });
+      return { plugin: Browser, closeEvent: 'browserFinished' as const };
+    }
+
+    // ── Layer 3: last resort ──────────────────────────────────────────────
     window.open(url, '_blank');
     return null;
   } catch {
@@ -269,20 +281,33 @@ const App: React.FC = () => {
   }, [bridgeMode, flowBridgeSceneId]);
 
   // ── CAPACITOR: listen for in-app browser close → show file picker ─────────
+  // Mirrors the two-layer strategy in openCapacitorBrowser:
+  //   - community InAppBrowser fires 'browserClosed'
+  //   - official @capacitor/browser fires 'browserFinished'
   useEffect(() => {
     if (!isCapacitorApp() || !isBridgeOpen) return;
     let removeListener: (() => void) | null = null;
 
     (async () => {
       try {
-        const InAppBrowser = (window as any).Capacitor?.Plugins?.InAppBrowser;
-        if (!InAppBrowser?.addListener) return;
-        const handle = await InAppBrowser.addListener('browserClosed', () => {
-          setIsBridgeOpen(false);
-          setShowMobileImport(true);
-        });
-        removeListener = () => handle.remove();
-      } catch { /* plugin not available in web */ }
+        const plugins = (window as any).Capacitor?.Plugins;
+        const onClose = () => { setIsBridgeOpen(false); setShowMobileImport(true); };
+
+        // Layer 1: community InAppBrowser
+        const InAppBrowser = plugins?.InAppBrowser;
+        if (InAppBrowser?.addListener) {
+          const handle = await InAppBrowser.addListener('browserClosed', onClose);
+          removeListener = () => handle.remove();
+          return;
+        }
+
+        // Layer 2: official @capacitor/browser
+        const Browser = plugins?.Browser;
+        if (Browser?.addListener) {
+          const handle = await Browser.addListener('browserFinished', onClose);
+          removeListener = () => handle.remove();
+        }
+      } catch { /* plugin not available in web/Electron */ }
     })();
 
     return () => { removeListener?.(); };
