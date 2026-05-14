@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => {
           '@capacitor/core',
           '@capacitor/android',
           '@capacitor/ios',
+          '@capacitor/browser',
           '@capacitor-community/inappbrowser',
         ],
       },
