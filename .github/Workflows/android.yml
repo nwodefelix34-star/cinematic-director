@@ -1,0 +1,103 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label (e.g. 1.0, 1.1)'
+        required: false
+        default: 'latest'
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: |
+          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps \
+            @capacitor/core@6 \
+            @capacitor/cli@6 \
+            @capacitor/android@6 \
+            @capacitor/browser@6 \
+            @capacitor-community/inappbrowser
+
+      - name: Build React app
+        run: |
+          echo "API key length: ${#GEMINI_API_KEY}"
+          npx vite build
+          echo "====== DIST SIZE ======"
+          du -sh dist/
+        env:
+          VITE_BUILD_TARGET: mobile
+          # Pass key under ALL names so vite.config.ts can find it
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          VITE_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Force copy dist to Android assets
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          cp -rv dist/* android/app/src/main/assets/public/
+          echo "====== ASSETS SIZE ======"
+          du -sh android/app/src/main/assets/public/
+
+      - name: Sync Capacitor plugins
+        run: npx cap sync android
+
+      - name: Verify plugins were synced
+        run: |
+          echo "====== Capacitor plugin list ======"
+          npx cap ls android 2>/dev/null || echo "(cap ls not available)"
+          echo "====== Checking Android build.gradle for plugins ======"
+          grep -i "inappbrowser\|capacitor.browser\|CapacitorBrowser" android/app/build.gradle || echo "Community InAppBrowser not in build.gradle"
+          grep -i "capacitor-browser\|CapacitorBrowser" android/app/build.gradle || echo "Official Browser plugin not in build.gradle"
+          echo "====== node_modules plugin check ======"
+          ls node_modules/@capacitor-community/inappbrowser/android/src/main/java/com/capacitorjs/community/plugins/inappbrowser/ 2>/dev/null || echo "Community InAppBrowser src not found"
+          ls node_modules/@capacitor/browser/android/src/main/java/com/capacitorjs/plugins/browser/ 2>/dev/null || echo "Official Browser src not found"
+
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        run: |
+          APK=$(find android -name "app-debug.apk" | head -1)
+          echo "====== APK SIZE ======"
+          du -sh "$APK"
+          cp "$APK" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
+          echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CinematicDirector-Android-v${{ github.event.inputs.version }}
+          path: ${{ env.APK_FILE }}
+          retention-days: 30
