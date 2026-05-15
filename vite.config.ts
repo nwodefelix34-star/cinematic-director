@@ -43,11 +43,13 @@ export default defineConfig(({ mode }) => {
         // We no longer import them in the code — instead we access them
         // via window.Capacitor.Plugins at runtime on Android/iOS.
         // This means Rollup never tries to bundle them and never fails.
+        // Externalize native-only Capacitor packages that can't be bundled.
+        // @capacitor/browser is intentionally NOT here — it must be bundled
+        // so the plugin JS is available inside the Android WebView.
         external: [
           '@capacitor/core',
           '@capacitor/android',
           '@capacitor/ios',
-          '@capacitor/browser',
           '@capacitor-community/inappbrowser',
         ],
       },
