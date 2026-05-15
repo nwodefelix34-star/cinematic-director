@@ -22,9 +22,8 @@ import { mapCharactersToScenes } from "./engine/sceneCharacterMapper";
 // PLATFORM DETECTION
 // The same React code runs in three environments:
 //   1. Web / Vercel  → normal browser, modals + window.open
-//   2. Electron      → desktop app, real embedded browser panel (right half of window)
+//   2. Electron      → desktop app, real embedded browser panel
 //   3. Capacitor     → Android / iOS app, in-app browser sheet
-// Each handler checks the platform and takes the right path.
 // ─────────────────────────────────────────────────────────────
 
 // ── Electron (desktop) ───────────────────────────────────────
@@ -45,48 +44,57 @@ declare global {
 }
 
 // ── Capacitor (Android / iOS) ─────────────────────────────────
-// isCapacitorApp is true only when running inside the installed Android/iOS app.
-// It is false in every browser (Vercel, localhost, Electron).
+// True only inside the installed Android/iOS APK — false in every browser.
 const isCapacitorApp = (): boolean =>
   typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 
-// Opens an in-app browser on Android/iOS using a two-layer strategy:
-//   Layer 1 — @capacitor-community/inappbrowser  → true embedded WebView (no Chrome at all)
-//   Layer 2 — @capacitor/browser (official)       → Chrome Custom Tab (stays in-app, shares login)
-//   Layer 3 — window.open                         → last-resort fallback
-// Neither package is imported — both are accessed via window.Capacitor.Plugins at runtime
-// so Rollup never bundles them and the web/Electron builds stay clean.
+// Opens a webpage INSIDE the app using Capacitor plugins registered by cap sync.
+// cap sync generates capacitor-plugins.js and injects it into the WebView —
+// this makes Plugins.Browser and Plugins.InAppBrowser available globally
+// WITHOUT any import statement or bundling.
+//
+// Layer 1: community InAppBrowser → true embedded WebView, custom toolbar, Done button
+// Layer 2: official @capacitor/browser → Chrome Custom Tab (stays in-app, shares logins)
+// Layer 3: window.open → last resort only (opens Chrome externally)
 const openCapacitorBrowser = async (url: string, title: string) => {
-  try {
-    const plugins = (window as any).Capacitor?.Plugins;
+  const cap = (window as any).Capacitor;
+  const Plugins = cap?.Plugins;
 
-    // ── Layer 1: Community InAppBrowser — true embedded WebView ──────────
-    const InAppBrowser = plugins?.InAppBrowser;
-    if (InAppBrowser?.openWebView) {
-      await InAppBrowser.openWebView({
+  // --- DIAGNOSTIC: shows on screen so you can see what loaded ---
+  // Remove this alert once the bridge is confirmed working
+  const loaded = [
+    'isNative=' + !!cap?.isNativePlatform?.(),
+    'InAppBrowser=' + !!(Plugins?.InAppBrowser?.openWebView),
+    'Browser=' + !!(Plugins?.Browser?.open),
+  ].join(' | ');
+  alert('[Bridge] ' + loaded + '\nURL: ' + url);
+  // --- END DIAGNOSTIC ---
+
+  try {
+    // Layer 1: community InAppBrowser (true embedded WebView)
+    if (Plugins?.InAppBrowser?.openWebView) {
+      await Plugins.InAppBrowser.openWebView({
         url,
-        toolbarColor:     '#0a0a0f',
+        toolbarColor: '#0a0a0f',
         title,
-        closeButtonText:  'Done  ✓',
-        showArrow:        true,
+        closeButtonText: 'Done ✓',
+        showArrow: true,
         showReloadButton: true,
       });
-      return { plugin: InAppBrowser, closeEvent: 'browserClosed' as const };
+      return { closeEvent: 'browserClosed' as const };
     }
 
-    // ── Layer 2: Official @capacitor/browser — Chrome Custom Tab ─────────
-    // Chrome Custom Tabs stay inside the app and share Chrome's cookies,
-    // so users remain logged in to ImageFX / Hunyuan automatically.
-    const Browser = plugins?.Browser;
-    if (Browser?.open) {
-      await Browser.open({ url, presentationStyle: 'fullscreen' });
-      return { plugin: Browser, closeEvent: 'browserFinished' as const };
+    // Layer 2: official @capacitor/browser (Chrome Custom Tab — stays in-app)
+    if (Plugins?.Browser?.open) {
+      await Plugins.Browser.open({ url, presentationStyle: 'fullscreen' });
+      return { closeEvent: 'browserFinished' as const };
     }
 
-    // ── Layer 3: last resort ──────────────────────────────────────────────
+    // Layer 3: last resort
     window.open(url, '_blank');
     return null;
-  } catch {
+  } catch (e) {
+    alert('[Bridge] Error: ' + String(e));
     window.open(url, '_blank');
     return null;
   }
@@ -280,35 +288,22 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridgeMode, flowBridgeSceneId]);
 
-  // ── CAPACITOR: listen for in-app browser close → show file picker ─────────
-  // Mirrors the two-layer strategy in openCapacitorBrowser:
-  //   - community InAppBrowser fires 'browserClosed'
-  //   - official @capacitor/browser fires 'browserFinished'
+  // ── CAPACITOR: when the in-app browser closes, show the file import picker ──
+  // Listens on whichever plugin actually opened the browser.
   useEffect(() => {
     if (!isCapacitorApp() || !isBridgeOpen) return;
+    const Plugins = (window as any).Capacitor?.Plugins;
+    if (!Plugins) return;
     let removeListener: (() => void) | null = null;
+    const onClose = () => { setIsBridgeOpen(false); setShowMobileImport(true); };
 
-    (async () => {
-      try {
-        const plugins = (window as any).Capacitor?.Plugins;
-        const onClose = () => { setIsBridgeOpen(false); setShowMobileImport(true); };
-
-        // Layer 1: community InAppBrowser
-        const InAppBrowser = plugins?.InAppBrowser;
-        if (InAppBrowser?.addListener) {
-          const handle = await InAppBrowser.addListener('browserClosed', onClose);
-          removeListener = () => handle.remove();
-          return;
-        }
-
-        // Layer 2: official @capacitor/browser
-        const Browser = plugins?.Browser;
-        if (Browser?.addListener) {
-          const handle = await Browser.addListener('browserFinished', onClose);
-          removeListener = () => handle.remove();
-        }
-      } catch { /* plugin not available in web/Electron */ }
-    })();
+    if (Plugins.InAppBrowser?.addListener) {
+      Plugins.InAppBrowser.addListener('browserClosed', onClose)
+        .then((h: any) => { removeListener = () => h.remove(); }).catch(() => {});
+    } else if (Plugins.Browser?.addListener) {
+      Plugins.Browser.addListener('browserFinished', onClose)
+        .then((h: any) => { removeListener = () => h.remove(); }).catch(() => {});
+    }
 
     return () => { removeListener?.(); };
   }, [isBridgeOpen]);
