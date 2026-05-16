@@ -48,55 +48,37 @@ declare global {
 const isCapacitorApp = (): boolean =>
   typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 
-// Opens a webpage INSIDE the app using Capacitor plugins registered by cap sync.
-// cap sync generates capacitor-plugins.js and injects it into the WebView —
-// this makes Plugins.Browser and Plugins.InAppBrowser available globally
-// WITHOUT any import statement or bundling.
+// Opens a webpage inside the app using @capacitor/browser (Chrome Custom Tab).
+// Chrome Custom Tabs look like a browser screen sliding up inside your app —
+// they share Chrome's cookies (users stay logged in) and have a close ✕ button
+// to return to the app. They do NOT open a separate Chrome window.
 //
-// Layer 1: community InAppBrowser → true embedded WebView, custom toolbar, Done button
-// Layer 2: official @capacitor/browser → Chrome Custom Tab (stays in-app, shares logins)
-// Layer 3: window.open → last resort only (opens Chrome externally)
-const openCapacitorBrowser = async (url: string, title: string) => {
+// @capacitor/browser registers itself as window.Capacitor.Plugins.Browser
+// after cap sync injects capacitor-plugins.js into the Android WebView.
+const openCapacitorBrowser = async (url: string, _title: string) => {
   const cap = (window as any).Capacitor;
   const Plugins = cap?.Plugins;
 
-  // --- DIAGNOSTIC: shows on screen so you can see what loaded ---
-  // Remove this alert once the bridge is confirmed working
+  // ── DIAGNOSTIC ALERT — remove once confirmed working ──────────────────
   const loaded = [
     'isNative=' + !!cap?.isNativePlatform?.(),
-    'InAppBrowser=' + !!(Plugins?.InAppBrowser?.openWebView),
-    'Browser=' + !!(Plugins?.Browser?.open),
+    'Browser='  + !!(Plugins?.Browser?.open),
   ].join(' | ');
   alert('[Bridge] ' + loaded + '\nURL: ' + url);
-  // --- END DIAGNOSTIC ---
+  // ── END DIAGNOSTIC ────────────────────────────────────────────────────
 
   try {
-    // Layer 1: community InAppBrowser (true embedded WebView)
-    if (Plugins?.InAppBrowser?.openWebView) {
-      await Plugins.InAppBrowser.openWebView({
-        url,
-        toolbarColor: '#0a0a0f',
-        title,
-        closeButtonText: 'Done ✓',
-        showArrow: true,
-        showReloadButton: true,
-      });
-      return { closeEvent: 'browserClosed' as const };
-    }
-
-    // Layer 2: official @capacitor/browser (Chrome Custom Tab — stays in-app)
     if (Plugins?.Browser?.open) {
       await Plugins.Browser.open({ url, presentationStyle: 'fullscreen' });
-      return { closeEvent: 'browserFinished' as const };
+      return true;
     }
-
-    // Layer 3: last resort
+    // Plugin not registered — falls back to external Chrome
     window.open(url, '_blank');
-    return null;
+    return false;
   } catch (e) {
     alert('[Bridge] Error: ' + String(e));
     window.open(url, '_blank');
-    return null;
+    return false;
   }
 };
 
