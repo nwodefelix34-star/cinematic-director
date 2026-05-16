@@ -48,38 +48,82 @@ declare global {
 const isCapacitorApp = (): boolean =>
   typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 
-// Opens a webpage inside the app using @capacitor/browser (Chrome Custom Tab).
-// Chrome Custom Tabs look like a browser screen sliding up inside your app —
-// they share Chrome's cookies (users stay logged in) and have a close ✕ button
-// to return to the app. They do NOT open a separate Chrome window.
+// ─────────────────────────────────────────────────────────────────────────────
+// openCapacitorBrowser — opens a REAL embedded WebView inside the app.
 //
-// @capacitor/browser registers itself as window.Capacitor.Plugins.Browser
-// after cap sync injects capacitor-plugins.js into the Android WebView.
-const openCapacitorBrowser = async (url: string, _title: string) => {
-  const cap = (window as any).Capacitor;
-  const Plugins = cap?.Plugins;
+// Uses cordova-plugin-inappbrowser which Capacitor supports natively.
+// This gives us:
+//   ✅ True embedded browser — no Chrome, no leaving the app
+//   ✅ Download interception — files can be caught and imported directly
+//   ✅ Custom toolbar with Done button that returns to exact app state
+//   ✅ Cookies shared per domain — user stays logged in
+//
+// The plugin registers as window.cordova.InAppBrowser after cap sync.
+// We also keep @capacitor/browser as a fallback (Chrome Custom Tab).
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // ── DIAGNOSTIC ALERT — remove once confirmed working ──────────────────
-  const loaded = [
-    'isNative=' + !!cap?.isNativePlatform?.(),
-    'Browser='  + !!(Plugins?.Browser?.open),
-  ].join(' | ');
-  alert('[Bridge] ' + loaded + '\nURL: ' + url);
-  // ── END DIAGNOSTIC ────────────────────────────────────────────────────
+// Holds the active InAppBrowser reference so the close listener can find it.
+let _activeBrowserRef: any = null;
 
-  try {
-    if (Plugins?.Browser?.open) {
-      await Plugins.Browser.open({ url, presentationStyle: 'fullscreen' });
-      return true;
-    }
-    // Plugin not registered — falls back to external Chrome
-    window.open(url, '_blank');
-    return false;
-  } catch (e) {
-    alert('[Bridge] Error: ' + String(e));
-    window.open(url, '_blank');
-    return false;
+const openCapacitorBrowser = (
+  url: string,
+  title: string,
+  onClose?: () => void,
+  onDownload?: (downloadUrl: string) => void,
+): void => {
+  // ── Try cordova InAppBrowser (true embedded WebView) ─────────────────
+  const cordovaIAB = (window as any).cordova?.InAppBrowser;
+  if (cordovaIAB) {
+    const browser = cordovaIAB.open(url, '_blank', [
+      'location=no',           // hide address bar — feels like part of the app
+      'toolbar=yes',
+      'toolbarcolor=#0a0a0f',  // match app dark theme
+      'closebuttoncaption=Done ✓',
+      'closebuttoncolor=#22d3ee',
+      'navigationbuttoncolor=#22d3ee',
+      'hidenavigationbuttons=no',
+      'hideurlbar=yes',
+      'footer=no',
+      'zoom=no',
+      'hardwareback=yes',
+    ].join(','));
+
+    _activeBrowserRef = browser;
+
+    // ── Download interception: catch files before they hit the system ──
+    browser.addEventListener('loadstart', (event: any) => {
+      const u: string = event.url || '';
+      // Common download extensions from ImageFX / Hunyuan
+      const isDownload = /\.(png|jpg|jpeg|webp|mp4|mov|webm)(\?|$)/i.test(u)
+        || u.includes('download')
+        || u.includes('export');
+      if (isDownload && onDownload) {
+        onDownload(u);
+        browser.close();
+      }
+    });
+
+    browser.addEventListener('exit', () => {
+      _activeBrowserRef = null;
+      onClose?.();
+    });
+
+    return;
   }
+
+  // ── Fallback: @capacitor/browser (Chrome Custom Tab — stays in-app) ──
+  const CapBrowser = (window as any).Capacitor?.Plugins?.Browser;
+  if (CapBrowser?.open) {
+    CapBrowser.open({ url, presentationStyle: 'fullscreen' });
+    // Listen for close
+    CapBrowser.addListener('browserFinished', () => {
+      onClose?.();
+    }).catch(() => {});
+    return;
+  }
+
+  // ── Last resort ───────────────────────────────────────────────────────
+  window.open(url, '_blank');
 };
 
 const AVAILABLE_FONTS = [
@@ -180,6 +224,9 @@ const App: React.FC = () => {
   const [flowBridgePrompt,  setFlowBridgePrompt]  = useState('');
   const [flowBridgeCopied,  setFlowBridgeCopied]  = useState(false);
   const [flowBridgeSceneId, setFlowBridgeSceneId] = useState<string | null>(null);
+  const flowBridgeSceneIdRef = useRef<string | null>(null);
+  // Keep ref in sync with state so download callbacks (closures) always see current sceneId
+  useEffect(() => { flowBridgeSceneIdRef.current = flowBridgeSceneId; }, [flowBridgeSceneId]);
   // Hunyuan
   const [isHunyuanBridgeOpen,  setIsHunyuanBridgeOpen]  = useState(false); // web fallback only
   const [hunyuanBridgePrompt,  setHunyuanBridgePrompt]  = useState('');
@@ -270,25 +317,10 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridgeMode, flowBridgeSceneId]);
 
-  // ── CAPACITOR: when the in-app browser closes, show the file import picker ──
-  // Listens on whichever plugin actually opened the browser.
-  useEffect(() => {
-    if (!isCapacitorApp() || !isBridgeOpen) return;
-    const Plugins = (window as any).Capacitor?.Plugins;
-    if (!Plugins) return;
-    let removeListener: (() => void) | null = null;
-    const onClose = () => { setIsBridgeOpen(false); setShowMobileImport(true); };
-
-    if (Plugins.InAppBrowser?.addListener) {
-      Plugins.InAppBrowser.addListener('browserClosed', onClose)
-        .then((h: any) => { removeListener = () => h.remove(); }).catch(() => {});
-    } else if (Plugins.Browser?.addListener) {
-      Plugins.Browser.addListener('browserFinished', onClose)
-        .then((h: any) => { removeListener = () => h.remove(); }).catch(() => {});
-    }
-
-    return () => { removeListener?.(); };
-  }, [isBridgeOpen]);
+  // ── CAPACITOR: close handling is done via onClose callback in openCapacitorBrowser ──
+  // The cordova InAppBrowser fires the 'exit' event directly on the browser object.
+  // The @capacitor/browser fallback fires 'browserFinished' and is handled inline.
+  // No separate useEffect listener needed — removing this prevents the blank screen bug.
 
   const saveToHistory = useCallback(() => {
     setHistoryPast(prev => { const n = [...prev, projectRef.current]; return n.length > 50 ? n.slice(1) : n; });
@@ -700,7 +732,35 @@ const App: React.FC = () => {
         setIsBridgeOpen(true);
         setShowMobileImport(false);
         navigator.clipboard.writeText(imagePrompt).catch(() => {});
-        openCapacitorBrowser('https://labs.google/fx/tools/image-fx', '⬡ Flow — Image Bridge');
+        openCapacitorBrowser(
+          'https://labs.google/fx/tools/image-fx',
+          '⬡ Flow — Image Bridge',
+          // onClose: browser dismissed → show import picker
+          () => { setIsBridgeOpen(false); setShowMobileImport(true); },
+          // onDownload: file detected → auto-fetch and import it directly
+          (downloadUrl) => {
+            setIsBridgeOpen(false);
+            fetch(downloadUrl)
+              .then(r => r.blob())
+              .then(blob => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const dataUrl = ev.target?.result as string;
+                  const sceneId = flowBridgeSceneIdRef.current;
+                  if (!sceneId) return;
+                  updateScene(sceneId, {
+                    frames: [{ id: 'frame-flow-' + Date.now(), index: 0,
+                               imageUrl: dataUrl, options: [dataUrl],
+                               duration: project.sceneDuration, type: 'ai' }],
+                    status: 'ready',
+                  }, true);
+                  setShowMobileImport(false);
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(() => { setShowMobileImport(true); }); // fallback to manual if fetch fails
+          },
+        );
 
       } else {
         // ── WEB (Vercel / localhost): original modal + window.open ──
@@ -762,7 +822,24 @@ const App: React.FC = () => {
       setIsBridgeOpen(true);
       setShowMobileImport(false);
       navigator.clipboard.writeText(videoPrompt).catch(() => {});
-      openCapacitorBrowser('https://aistudio.tencent.com/visual', '⬡ Hunyuan — Video Bridge');
+      openCapacitorBrowser(
+        'https://aistudio.tencent.com/visual',
+        '⬡ Hunyuan — Video Bridge',
+        // onClose: browser dismissed → show import picker
+        () => { setIsBridgeOpen(false); setShowMobileImport(true); },
+        // onDownload: video file detected → auto-fetch and import
+        (downloadUrl) => {
+          setIsBridgeOpen(false);
+          fetch(downloadUrl)
+            .then(r => r.blob())
+            .then(blob => {
+              const objectUrl = URL.createObjectURL(blob);
+              updateScene(activeSceneId, { videoUrl: objectUrl, status: 'ready' }, true);
+              setShowMobileImport(false);
+            })
+            .catch(() => { setShowMobileImport(true); });
+        },
+      );
 
     } else {
       // ── WEB: original modal ──
