@@ -167,55 +167,14 @@ const openCapacitorBrowser = (
   _title: string,
   onClose?: () => void,
 ): void => {
-  const chromeUA = 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
-
-  // ── DIAGNOSTIC — remove once working ─────────────────────────────────
-  const cap = (window as any).Capacitor;
-  const cordova = (window as any).cordova;
-  alert(
-    '[Browser Debug]\n' +
-    'isNative=' + !!cap?.isNativePlatform?.() + '\n' +
-    'cordova=' + !!cordova + '\n' +
-    'cordova.IAB=' + !!(cordova?.InAppBrowser) + '\n' +
-    'CapBrowser=' + !!(cap?.Plugins?.Browser?.open)
-  );
-  // ── END DIAGNOSTIC ────────────────────────────────────────────────────
-
-  const cordovaIAB = (window as any).cordova?.InAppBrowser;
-  if (cordovaIAB) {
-    try {
-      alert('[IAB] open() exists=' + typeof cordovaIAB.open + ' url=' + url.slice(0,30));
-      const browser = cordovaIAB.open(url, '_blank', [
-        'location=yes',
-        'toolbar=yes',
-        'toolbarcolor=#0a0a0f',
-        'navigationbuttoncolor=#22d3ee',
-        'closebuttoncaption=Done ✓',
-        'closebuttoncolor=#22d3ee',
-        'hidenavigationbuttons=no',
-        'hideurlbar=no',
-        'footer=no',
-        'zoom=no',
-        'hardwareback=yes',
-        `useragent=${chromeUA}`,
-      ].join(','));
-      if (!browser) { alert('[IAB] open() returned null/undefined'); return; }
-      browser.addEventListener('exit', () => { onClose?.(); });
-      alert('[IAB] Browser opened successfully');
-    } catch(e) {
-      alert('[IAB] ERROR: ' + String(e));
-    }
-    return;
-  }
-
-  // Fallback: Chrome Custom Tab
+  // @capacitor/browser opens a Chrome Custom Tab — stays inside the app,
+  // handles Google login natively, user stays logged in between sessions.
   const CapBrowser = (window as any).Capacitor?.Plugins?.Browser;
   if (CapBrowser?.open) {
     CapBrowser.open({ url, presentationStyle: 'fullscreen' });
     CapBrowser.addListener('browserFinished', () => { onClose?.(); }).catch(() => {});
     return;
   }
-
   window.open(url, '_blank');
 };
 
