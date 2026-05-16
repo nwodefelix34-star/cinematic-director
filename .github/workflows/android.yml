@@ -34,21 +34,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        # --legacy-peer-deps needed for some React 19 conflicts
-        # NO --ignore-scripts or --omit=optional — we need ALL deps including Capacitor plugins
         run: npm install --legacy-peer-deps
 
-      - name: Verify browser plugins are in node_modules
+      - name: Verify plugins in node_modules
         run: |
           echo "=== @capacitor/browser ==="
-          ls node_modules/@capacitor/browser/package.json && echo "✅ @capacitor/browser installed" || echo "❌ MISSING"
+          ls node_modules/@capacitor/browser/package.json && echo "✅ installed" || echo "❌ MISSING"
+          echo "=== cordova-plugin-inappbrowser ==="
+          ls node_modules/cordova-plugin-inappbrowser/package.json && echo "✅ installed" || echo "❌ MISSING"
 
       - name: Build React app
-        run: |
-          echo "API key length: ${#GEMINI_API_KEY}"
-          npx vite build
-          echo "====== DIST SIZE ======"
-          du -sh dist/
+        run: npx vite build
         env:
           VITE_BUILD_TARGET: mobile
           GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
@@ -57,26 +53,19 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Sync Capacitor plugins into Android
+      - name: Sync Capacitor + Cordova plugins into Android
         run: npx cap sync android
 
-      - name: Verify plugins were registered by cap sync
+      - name: Verify cordova plugin registered in Android build
         run: |
-          echo "=== Plugins in capacitor.config ==="
-          cat node_modules/@capacitor/browser/package.json | grep '"name"'
-          echo "=== Checking android/variables.gradle for plugin entries ==="
-          cat android/variables.gradle || echo "(no variables.gradle)"
-          echo "=== Checking if plugin Java files exist in android/ ==="
-          find android -name "BrowserPlugin.java" -o -name "InAppBrowserPlugin.java" 2>/dev/null | head -10
-          echo "=== capacitor-cordova-android-plugins ==="
+          echo "=== Cordova plugins registered ==="
+          find android -name "InAppBrowser*" 2>/dev/null | head -10 || echo "(not found yet)"
           ls android/capacitor-cordova-android-plugins/ 2>/dev/null || echo "(no cordova plugins dir)"
 
       - name: Force copy dist to Android assets
         run: |
           mkdir -p android/app/src/main/assets/public
           cp -rv dist/* android/app/src/main/assets/public/
-          echo "====== ASSETS SIZE ======"
-          du -sh android/app/src/main/assets/public/
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
@@ -89,8 +78,6 @@ jobs:
       - name: Upload APK
         run: |
           APK=$(find android -name "app-debug.apk" | head -1)
-          echo "====== APK SIZE ======"
-          du -sh "$APK"
           cp "$APK" "CinematicDirector-v${{ github.event.inputs.version }}.apk"
           echo "APK_FILE=CinematicDirector-v${{ github.event.inputs.version }}.apk" >> $GITHUB_ENV
 
