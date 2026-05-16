@@ -44,85 +44,161 @@ declare global {
 }
 
 // ── Capacitor (Android / iOS) ─────────────────────────────────
-// True only inside the installed Android/iOS APK — false in every browser.
 const isCapacitorApp = (): boolean =>
   typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// openCapacitorBrowser — opens a REAL embedded WebView inside the app.
-//
-// Uses cordova-plugin-inappbrowser which Capacitor supports natively.
-// This gives us:
-//   ✅ True embedded browser — no Chrome, no leaving the app
-//   ✅ Download interception — files can be caught and imported directly
-//   ✅ Custom toolbar with Done button that returns to exact app state
-//   ✅ Cookies shared per domain — user stays logged in
-//
-// The plugin registers as window.cordova.InAppBrowser after cap sync.
-// We also keep @capacitor/browser as a fallback (Chrome Custom Tab).
+// AUTO-IMPORT: scans phone storage for the newest image/video after browser closes
+// Uses @capacitor/filesystem which registers as window.Capacitor.Plugins.Filesystem
 // ─────────────────────────────────────────────────────────────────────────────
+const autoImportNewestFile = async (
+  type: 'image' | 'video',
+  onSuccess: (dataUrl: string, mimeType: string) => void,
+  onFail: () => void,
+) => {
+  try {
+    const Filesystem = (window as any).Capacitor?.Plugins?.Filesystem;
+    if (!Filesystem) { onFail(); return; }
 
-// Holds the active InAppBrowser reference so the close listener can find it.
-let _activeBrowserRef: any = null;
+    // Folders where ImageFX and Hunyuan save files on Android
+    const folders = type === 'image'
+      ? ['Pictures', 'Pictures/ImageFX', 'Pictures/Flow', 'Download']
+      : ['Movies', 'Download', 'DCIM/Camera'];
 
+    const cutoff = Date.now() - 90_000; // files saved in last 90 seconds
+    const exts   = type === 'image' ? ['.jpg', '.jpeg', '.png', '.webp'] : ['.mp4', '.mov', '.webm'];
+
+    let newest: { path: string; mtime: number; mime: string } | null = null;
+
+    for (const folder of folders) {
+      try {
+        const { files } = await Filesystem.readdir({
+          path: folder,
+          directory: 'EXTERNAL_STORAGE',
+        });
+        for (const f of (files || [])) {
+          const name: string = typeof f === 'string' ? f : f.name;
+          const mtime: number = typeof f === 'object' ? (f.mtime || 0) : 0;
+          if (!exts.some(e => name.toLowerCase().endsWith(e))) continue;
+          if (mtime < cutoff && mtime !== 0) continue;
+          if (!newest || mtime > newest.mtime) {
+            newest = {
+              path: folder + '/' + name,
+              mtime,
+              mime: name.endsWith('.png') ? 'image/png'
+                  : name.endsWith('.webp') ? 'image/webp'
+                  : name.endsWith('.mp4') ? 'video/mp4'
+                  : name.endsWith('.mov') ? 'video/quicktime'
+                  : 'image/jpeg',
+            };
+          }
+        }
+      } catch { /* folder may not exist — skip */ }
+    }
+
+    if (!newest) { onFail(); return; }
+
+    const { data } = await Filesystem.readFile({
+      path: newest.path,
+      directory: 'EXTERNAL_STORAGE',
+    });
+    const dataUrl = `data:${newest.mime};base64,${data}`;
+    onSuccess(dataUrl, newest.mime);
+  } catch { onFail(); }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// scanFilesLibrary — reads phone storage and returns all media files
+// sorted newest-first. Called when user opens the Files panel.
+// ─────────────────────────────────────────────────────────────────────────────
+const scanFilesLibrary = async (): Promise<Array<{
+  id: string; path: string; name: string; dataUrl: string;
+  mime: string; mtime: number; type: 'image' | 'video';
+}>> => {
+  const Filesystem = (window as any).Capacitor?.Plugins?.Filesystem;
+  if (!Filesystem) return [];
+
+  const folders = ['Pictures', 'Pictures/ImageFX', 'Pictures/Flow', 'Download', 'Movies', 'DCIM/Camera'];
+  const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
+  const videoExts = ['.mp4', '.mov', '.webm'];
+  const results: any[] = [];
+
+  for (const folder of folders) {
+    try {
+      const { files } = await Filesystem.readdir({ path: folder, directory: 'EXTERNAL_STORAGE' });
+      for (const f of (files || [])) {
+        const name: string = typeof f === 'string' ? f : f.name;
+        const mtime: number = typeof f === 'object' ? (f.mtime || Date.now()) : Date.now();
+        const isImage = imageExts.some(e => name.toLowerCase().endsWith(e));
+        const isVideo = videoExts.some(e => name.toLowerCase().endsWith(e));
+        if (!isImage && !isVideo) continue;
+        const mime = name.endsWith('.png') ? 'image/png'
+                   : name.endsWith('.webp') ? 'image/webp'
+                   : name.endsWith('.mp4') ? 'video/mp4'
+                   : name.endsWith('.mov') ? 'video/quicktime'
+                   : 'image/jpeg';
+        try {
+          const { data } = await Filesystem.readFile({ path: folder + '/' + name, directory: 'EXTERNAL_STORAGE' });
+          results.push({
+            id: folder + '/' + name,
+            path: folder + '/' + name,
+            name,
+            dataUrl: `data:${mime};base64,${data}`,
+            mime,
+            mtime,
+            type: isVideo ? 'video' : 'image',
+          });
+        } catch { /* file unreadable — skip */ }
+      }
+    } catch { /* folder missing — skip */ }
+  }
+
+  return results.sort((a, b) => b.mtime - a.mtime).slice(0, 100); // newest 100 files
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// openCapacitorBrowser — dark-themed embedded browser matching the app UI.
+// Uses cordova-plugin-inappbrowser (true WebView, no Chrome switching).
+// Falls back to @capacitor/browser (Chrome Custom Tab) if cordova not loaded.
+// After closing, auto-imports the newest file from phone storage.
+// ─────────────────────────────────────────────────────────────────────────────
 const openCapacitorBrowser = (
   url: string,
-  title: string,
+  _title: string,
   onClose?: () => void,
-  onDownload?: (downloadUrl: string) => void,
 ): void => {
-  // ── Try cordova InAppBrowser (true embedded WebView) ─────────────────
+  // Chrome user-agent required — Google blocks sign-in in plain WebViews
+  const chromeUA = 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+
   const cordovaIAB = (window as any).cordova?.InAppBrowser;
   if (cordovaIAB) {
     const browser = cordovaIAB.open(url, '_blank', [
-      'location=no',           // hide address bar — feels like part of the app
+      'location=yes',
       'toolbar=yes',
-      'toolbarcolor=#0a0a0f',  // match app dark theme
+      'toolbarcolor=#0a0a0f',
+      'navigationbuttoncolor=#22d3ee',
       'closebuttoncaption=Done ✓',
       'closebuttoncolor=#22d3ee',
-      'navigationbuttoncolor=#22d3ee',
       'hidenavigationbuttons=no',
-      'hideurlbar=yes',
+      'hideurlbar=no',
       'footer=no',
       'zoom=no',
       'hardwareback=yes',
+      `useragent=${chromeUA}`,
     ].join(','));
 
-    _activeBrowserRef = browser;
-
-    // ── Download interception: catch files before they hit the system ──
-    browser.addEventListener('loadstart', (event: any) => {
-      const u: string = event.url || '';
-      // Common download extensions from ImageFX / Hunyuan
-      const isDownload = /\.(png|jpg|jpeg|webp|mp4|mov|webm)(\?|$)/i.test(u)
-        || u.includes('download')
-        || u.includes('export');
-      if (isDownload && onDownload) {
-        onDownload(u);
-        browser.close();
-      }
-    });
-
-    browser.addEventListener('exit', () => {
-      _activeBrowserRef = null;
-      onClose?.();
-    });
-
+    browser.addEventListener('exit', () => { onClose?.(); });
     return;
   }
 
-  // ── Fallback: @capacitor/browser (Chrome Custom Tab — stays in-app) ──
+  // Fallback: Chrome Custom Tab
   const CapBrowser = (window as any).Capacitor?.Plugins?.Browser;
   if (CapBrowser?.open) {
     CapBrowser.open({ url, presentationStyle: 'fullscreen' });
-    // Listen for close
-    CapBrowser.addListener('browserFinished', () => {
-      onClose?.();
-    }).catch(() => {});
+    CapBrowser.addListener('browserFinished', () => { onClose?.(); }).catch(() => {});
     return;
   }
 
-  // ── Last resort ───────────────────────────────────────────────────────
   window.open(url, '_blank');
 };
 
@@ -234,6 +310,13 @@ const App: React.FC = () => {
   const [hunyuanImportUrl,     setHunyuanImportUrl]      = useState('');
   // Mobile (Capacitor) — show file-picker after the in-app browser closes
   const [showMobileImport,  setShowMobileImport]  = useState(false);
+  // Files tab — permanent media library panel
+  const [showFilesPanel,    setShowFilesPanel]     = useState(false);
+  const [filesLibrary,      setFilesLibrary]       = useState<Array<{
+    id: string; path: string; name: string; dataUrl: string;
+    mime: string; mtime: number; type: 'image' | 'video';
+  }>>([]);
+  const [isScanningFiles,   setIsScanningFiles]   = useState(false);
 
 
   const [activeTab, setActiveTab] = useState<AppTab>('story');
@@ -734,31 +817,27 @@ const App: React.FC = () => {
         navigator.clipboard.writeText(imagePrompt).catch(() => {});
         openCapacitorBrowser(
           'https://labs.google/fx/tools/image-fx',
-          '⬡ Flow — Image Bridge',
-          // onClose: browser dismissed → show import picker
-          () => { setIsBridgeOpen(false); setShowMobileImport(true); },
-          // onDownload: file detected → auto-fetch and import it directly
-          (downloadUrl) => {
+          '⬡ Flow',
+          // onClose: auto-scan phone storage for newest image, import directly into scene
+          () => {
             setIsBridgeOpen(false);
-            fetch(downloadUrl)
-              .then(r => r.blob())
-              .then(blob => {
-                const reader = new FileReader();
-                reader.onload = ev => {
-                  const dataUrl = ev.target?.result as string;
-                  const sceneId = flowBridgeSceneIdRef.current;
-                  if (!sceneId) return;
-                  updateScene(sceneId, {
-                    frames: [{ id: 'frame-flow-' + Date.now(), index: 0,
-                               imageUrl: dataUrl, options: [dataUrl],
-                               duration: project.sceneDuration, type: 'ai' }],
-                    status: 'ready',
-                  }, true);
-                  setShowMobileImport(false);
-                };
-                reader.readAsDataURL(blob);
-              })
-              .catch(() => { setShowMobileImport(true); }); // fallback to manual if fetch fails
+            autoImportNewestFile(
+              'image',
+              (dataUrl) => {
+                const sceneId = flowBridgeSceneIdRef.current;
+                if (!sceneId) { setShowMobileImport(true); return; }
+                updateScene(sceneId, {
+                  frames: [{ id: 'frame-flow-' + Date.now(), index: 0,
+                             imageUrl: dataUrl, options: [dataUrl],
+                             duration: project.sceneDuration, type: 'ai' as const }],
+                  status: 'ready',
+                }, true);
+                setBridgeAutoImported(true);
+                setTimeout(() => setBridgeAutoImported(false), 4000);
+              },
+              // fallback: show manual picker if auto-import fails
+              () => setShowMobileImport(true),
+            );
           },
         );
 
@@ -824,20 +903,18 @@ const App: React.FC = () => {
       navigator.clipboard.writeText(videoPrompt).catch(() => {});
       openCapacitorBrowser(
         'https://aistudio.tencent.com/visual',
-        '⬡ Hunyuan — Video Bridge',
-        // onClose: browser dismissed → show import picker
-        () => { setIsBridgeOpen(false); setShowMobileImport(true); },
-        // onDownload: video file detected → auto-fetch and import
-        (downloadUrl) => {
+        '⬡ Hunyuan',
+        () => {
           setIsBridgeOpen(false);
-          fetch(downloadUrl)
-            .then(r => r.blob())
-            .then(blob => {
-              const objectUrl = URL.createObjectURL(blob);
-              updateScene(activeSceneId, { videoUrl: objectUrl, status: 'ready' }, true);
-              setShowMobileImport(false);
-            })
-            .catch(() => { setShowMobileImport(true); });
+          autoImportNewestFile(
+            'video',
+            (dataUrl) => {
+              updateScene(activeSceneId, { videoUrl: dataUrl, status: 'ready' }, true);
+              setBridgeAutoImported(true);
+              setTimeout(() => setBridgeAutoImported(false), 4000);
+            },
+            () => setShowMobileImport(true),
+          );
         },
       );
 
@@ -1317,6 +1394,131 @@ const App: React.FC = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════
+          FILES PANEL  — permanent media library (Capacitor only)
+          Shows all images & videos from phone storage.
+          Tap any file to use it in the current scene instantly.
+      ════════════════════════════════════════════════════════ */}
+      {showFilesPanel && isCapacitorApp() && (
+        <div className="fixed inset-0 z-[110] flex flex-col bg-[#070709]">
+
+          {/* header */}
+          <div className="flex items-center justify-between px-5 pt-10 pb-4 border-b border-white/10">
+            <div>
+              <h2 className="text-base font-black uppercase tracking-widest text-white">
+                <i className="fas fa-photo-film mr-2 text-cyan-400"></i>Files
+              </h2>
+              <p className="text-[9px] text-slate-500 mt-0.5 uppercase tracking-widest">
+                Tap any file to import into scene · {filesLibrary.length} files
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setIsScanningFiles(true);
+                  const Filesystem = (window as any).Capacitor?.Plugins?.Filesystem;
+                  if (Filesystem) {
+                    try {
+                      await Filesystem.requestPermissions();
+                    } catch {}
+                  }
+                  const files = await scanFilesLibrary();
+                  setFilesLibrary(files);
+                  setIsScanningFiles(false);
+                }}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl text-[9px] font-black uppercase text-slate-300 transition-all"
+              >
+                {isScanningFiles ? (
+                  <><i className="fas fa-spinner fa-spin mr-1"></i>Scanning...</>
+                ) : (
+                  <><i className="fas fa-rotate mr-1"></i>Refresh</>
+                )}
+              </button>
+              <button
+                onClick={() => setShowFilesPanel(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-slate-400 hover:text-white"
+              >✕</button>
+            </div>
+          </div>
+
+          {/* file grid */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {isScanningFiles ? (
+              <div className="flex flex-col items-center justify-center h-64 gap-4">
+                <i className="fas fa-spinner fa-spin text-3xl text-cyan-400"></i>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Scanning phone storage...</p>
+              </div>
+            ) : filesLibrary.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 gap-4">
+                <i className="fas fa-folder-open text-4xl text-slate-700"></i>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest text-center">
+                  No files found yet.<br/>Generate an image or video first,<br/>then tap Refresh.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {filesLibrary.map(file => (
+                  <button
+                    key={file.id}
+                    onClick={() => {
+                      if (file.type === 'image') {
+                        updateScene(activeSceneId, {
+                          frames: [{ id: 'frame-lib-' + Date.now(), index: 0,
+                                     imageUrl: file.dataUrl, options: [file.dataUrl],
+                                     duration: project.sceneDuration, type: 'ai' as const }],
+                          status: 'ready',
+                        }, true);
+                      } else {
+                        updateScene(activeSceneId, { videoUrl: file.dataUrl, status: 'ready' }, true);
+                      }
+                      setShowFilesPanel(false);
+                    }}
+                    className="relative aspect-square rounded-xl overflow-hidden border border-white/10 hover:border-cyan-400/60 active:scale-95 transition-all"
+                  >
+                    {file.type === 'image' ? (
+                      <img src={file.dataUrl} className="w-full h-full object-cover" alt={file.name} />
+                    ) : (
+                      <div className="w-full h-full bg-black/60 flex flex-col items-center justify-center gap-1">
+                        <i className="fas fa-film text-2xl text-purple-400"></i>
+                        <span className="text-[7px] text-slate-400 px-1 text-center truncate w-full">{file.name.slice(0, 20)}</span>
+                      </div>
+                    )}
+                    {/* file type badge */}
+                    <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[7px] font-black ${file.type === 'image' ? 'bg-blue-500/80' : 'bg-purple-500/80'} text-white`}>
+                      {file.type === 'image' ? 'IMG' : 'VID'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* bottom action — open browser to generate more */}
+          <div className="px-4 pb-8 pt-3 border-t border-white/10 grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                setShowFilesPanel(false);
+                // triggers the normal generate flow
+              }}
+              className="py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-black uppercase text-slate-300 hover:bg-white/10 transition-all"
+            >
+              ← Back to Editor
+            </button>
+            <button
+              onClick={async () => {
+                setIsScanningFiles(true);
+                const files = await scanFilesLibrary();
+                setFilesLibrary(files);
+                setIsScanningFiles(false);
+              }}
+              className="py-3 bg-cyan-500/20 border border-cyan-500/40 rounded-2xl text-[9px] font-black uppercase text-cyan-300 hover:bg-cyan-500/30 transition-all"
+            >
+              <i className="fas fa-rotate mr-1"></i>Scan for New Files
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
           WEB FALLBACK MODALS  (Vercel / localhost only)
           These show when running in a normal browser.
           Electron and Capacitor never reach these blocks.
@@ -1483,6 +1685,22 @@ const App: React.FC = () => {
                     <button onClick={handleOpenHunyuanBridge} disabled={!hasImageForActiveScene} className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
                       <i className="fas fa-video"></i> {hasImageForActiveScene ? 'Generate Video via Hunyuan' : 'Generate Image First'}
                     </button>
+                    {isCapacitorApp() && (
+                      <button
+                        onClick={async () => {
+                          setShowFilesPanel(true);
+                          setIsScanningFiles(true);
+                          const Filesystem = (window as any).Capacitor?.Plugins?.Filesystem;
+                          if (Filesystem) { try { await Filesystem.requestPermissions(); } catch {} }
+                          const files = await scanFilesLibrary();
+                          setFilesLibrary(files);
+                          setIsScanningFiles(false);
+                        }}
+                        className="w-full py-3 bg-[#0f1a1a] border border-cyan-500/30 hover:border-cyan-400/60 text-cyan-400 rounded-xl text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2"
+                      >
+                        <i className="fas fa-photo-film"></i> Browse Files Library
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
