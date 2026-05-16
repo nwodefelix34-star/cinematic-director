@@ -1,36 +1,32 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
-// ═══════════════════════════════════════════════════════════════
-// CAPACITOR CONFIG — Android & iOS
-//
-// Android: Build and install the APK yourself using Android
-//   Studio (free). No store account needed for personal use.
-//
-// iOS: The Capacitor code is fully ready and will work when
-//   you are ready. Building for iPhone requires:
-//     - A Mac computer
-//     - Apple Developer account ($99/year)
-//   When you go public on the App Store you will need both.
-//   For now just build Android.
-// ═══════════════════════════════════════════════════════════════
-
 const config: CapacitorConfig = {
   appId:   'com.cinematicdirector.app',
   appName: 'Cinematic Director',
-  webDir:  'dist',        // Vite build output folder
+  webDir:  'dist',
 
   server: {
-    androidScheme: 'https',  // required so Android WebView handles assets correctly
+    androidScheme: 'https',
   },
 
   android: {
-    allowMixedContent: true, // lets the WebView load external sites (ImageFX, Hunyuan)
+    allowMixedContent: true,
+  },
+
+  // cordova-plugin-inappbrowser config
+  // Opens URLs in a true embedded WebView inside the app.
+  // This is what makes downloads catchable and prevents Chrome from opening.
+  cordova: {
+    preferences: {
+      // Allow the WebView to open any URL (needed for ImageFX, Hunyuan etc.)
+      AllowNavigation: '*',
+      // Keep cookies across sessions so user stays logged in
+      InAppBrowserStorageCookies: 'true',
+    },
   },
 
   plugins: {
-    // InAppBrowser opens a real browser panel inside the app.
-    // It keeps cookies per URL so the user stays logged in.
-    InAppBrowser: {},
+    Browser: {},
   },
 };
 
