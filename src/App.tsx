@@ -167,8 +167,19 @@ const openCapacitorBrowser = (
   _title: string,
   onClose?: () => void,
 ): void => {
-  // Chrome user-agent required — Google blocks sign-in in plain WebViews
   const chromeUA = 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+
+  // ── DIAGNOSTIC — remove once working ─────────────────────────────────
+  const cap = (window as any).Capacitor;
+  const cordova = (window as any).cordova;
+  alert(
+    '[Browser Debug]\n' +
+    'isNative=' + !!cap?.isNativePlatform?.() + '\n' +
+    'cordova=' + !!cordova + '\n' +
+    'cordova.IAB=' + !!(cordova?.InAppBrowser) + '\n' +
+    'CapBrowser=' + !!(cap?.Plugins?.Browser?.open)
+  );
+  // ── END DIAGNOSTIC ────────────────────────────────────────────────────
 
   const cordovaIAB = (window as any).cordova?.InAppBrowser;
   if (cordovaIAB) {
