@@ -8,10 +8,8 @@
     "dev":     "vite",
     "build":   "vite build",
     "preview": "vite preview",
-
     "electron:dev":   "concurrently --kill-others \"vite\" \"wait-on http://localhost:5000 && cross-env NODE_ENV=development electron electron/main.cjs\"",
     "electron:build": "cross-env VITE_BUILD_TARGET=desktop vite build && electron-builder",
-
     "android":     "cross-env VITE_BUILD_TARGET=mobile vite build && npx cap sync android && npx cap open android",
     "ios":         "cross-env VITE_BUILD_TARGET=mobile vite build && npx cap sync ios && npx cap open ios",
     "mobile:sync": "cross-env VITE_BUILD_TARGET=mobile vite build && npx cap sync"
@@ -26,15 +24,16 @@
     "linux": { "target": "AppImage", "icon": "icon-512x512.png" }
   },
   "dependencies": {
-    "@google/genai":         "^1.40.0",
-    "@google/generative-ai": "^0.24.1",
-    "@capacitor/browser":    "^6.0.0",
-    "better-sqlite3":        "^12.6.2",
-    "cors":                  "^2.8.6",
-    "express":               "^4.18.2",
-    "node-fetch":            "^3.3.2",
-    "react":                 "^19.2.4",
-    "react-dom":             "^19.2.4"
+    "@google/genai":             "^1.40.0",
+    "@google/generative-ai":     "^0.24.1",
+    "@capacitor/browser":        "^6.0.0",
+    "cordova-plugin-inappbrowser": "^5.0.0",
+    "better-sqlite3":            "^12.6.2",
+    "cors":                      "^2.8.6",
+    "express":                   "^4.18.2",
+    "node-fetch":                "^3.3.2",
+    "react":                     "^19.2.4",
+    "react-dom":                 "^19.2.4"
   },
   "devDependencies": {
     "@types/node":          "^22.14.0",
