@@ -34,14 +34,16 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
+        # --legacy-peer-deps needed for some React 19 conflicts
+        # NO --ignore-scripts or --omit=optional — we need ALL deps including Capacitor plugins
+        run: npm install --legacy-peer-deps
+
+      - name: Verify browser plugins are in node_modules
         run: |
-          npm install --legacy-peer-deps
-          npm install --legacy-peer-deps \
-            @capacitor/core@6 \
-            @capacitor/cli@6 \
-            @capacitor/android@6 \
-            @capacitor/browser@6 \
-            @capacitor-community/inappbrowser
+          echo "=== @capacitor/browser ==="
+          ls node_modules/@capacitor/browser/package.json && echo "✅ @capacitor/browser installed" || echo "❌ MISSING"
+          echo "=== @capacitor-community/inappbrowser ==="
+          ls node_modules/@capacitor-community/inappbrowser/package.json && echo "✅ @capacitor-community/inappbrowser installed" || echo "❌ MISSING"
 
       - name: Build React app
         run: |
@@ -51,12 +53,26 @@ jobs:
           du -sh dist/
         env:
           VITE_BUILD_TARGET: mobile
-          # Pass key under ALL names so vite.config.ts can find it
-          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
-          VITE_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          VITE_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
 
       - name: Add Android platform
         run: npx cap add android
+
+      - name: Sync Capacitor plugins into Android
+        run: npx cap sync android
+
+      - name: Verify plugins were registered by cap sync
+        run: |
+          echo "=== Plugins in capacitor.config ==="
+          cat node_modules/@capacitor/browser/package.json | grep '"name"'
+          cat node_modules/@capacitor-community/inappbrowser/package.json | grep '"name"'
+          echo "=== Checking android/variables.gradle for plugin entries ==="
+          cat android/variables.gradle || echo "(no variables.gradle)"
+          echo "=== Checking if plugin Java files exist in android/ ==="
+          find android -name "BrowserPlugin.java" -o -name "InAppBrowserPlugin.java" 2>/dev/null | head -10
+          echo "=== capacitor-cordova-android-plugins ==="
+          ls android/capacitor-cordova-android-plugins/ 2>/dev/null || echo "(no cordova plugins dir)"
 
       - name: Force copy dist to Android assets
         run: |
@@ -64,20 +80,6 @@ jobs:
           cp -rv dist/* android/app/src/main/assets/public/
           echo "====== ASSETS SIZE ======"
           du -sh android/app/src/main/assets/public/
-
-      - name: Sync Capacitor plugins
-        run: npx cap sync android
-
-      - name: Verify plugins were synced
-        run: |
-          echo "====== Capacitor plugin list ======"
-          npx cap ls android 2>/dev/null || echo "(cap ls not available)"
-          echo "====== Checking Android build.gradle for plugins ======"
-          grep -i "inappbrowser\|capacitor.browser\|CapacitorBrowser" android/app/build.gradle || echo "Community InAppBrowser not in build.gradle"
-          grep -i "capacitor-browser\|CapacitorBrowser" android/app/build.gradle || echo "Official Browser plugin not in build.gradle"
-          echo "====== node_modules plugin check ======"
-          ls node_modules/@capacitor-community/inappbrowser/android/src/main/java/com/capacitorjs/community/plugins/inappbrowser/ 2>/dev/null || echo "Community InAppBrowser src not found"
-          ls node_modules/@capacitor/browser/android/src/main/java/com/capacitorjs/plugins/browser/ 2>/dev/null || echo "Official Browser src not found"
 
       - name: Make Gradle executable
         run: chmod +x android/gradlew
