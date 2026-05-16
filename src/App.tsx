@@ -183,22 +183,28 @@ const openCapacitorBrowser = (
 
   const cordovaIAB = (window as any).cordova?.InAppBrowser;
   if (cordovaIAB) {
-    const browser = cordovaIAB.open(url, '_blank', [
-      'location=yes',
-      'toolbar=yes',
-      'toolbarcolor=#0a0a0f',
-      'navigationbuttoncolor=#22d3ee',
-      'closebuttoncaption=Done ✓',
-      'closebuttoncolor=#22d3ee',
-      'hidenavigationbuttons=no',
-      'hideurlbar=no',
-      'footer=no',
-      'zoom=no',
-      'hardwareback=yes',
-      `useragent=${chromeUA}`,
-    ].join(','));
-
-    browser.addEventListener('exit', () => { onClose?.(); });
+    try {
+      alert('[IAB] open() exists=' + typeof cordovaIAB.open + ' url=' + url.slice(0,30));
+      const browser = cordovaIAB.open(url, '_blank', [
+        'location=yes',
+        'toolbar=yes',
+        'toolbarcolor=#0a0a0f',
+        'navigationbuttoncolor=#22d3ee',
+        'closebuttoncaption=Done ✓',
+        'closebuttoncolor=#22d3ee',
+        'hidenavigationbuttons=no',
+        'hideurlbar=no',
+        'footer=no',
+        'zoom=no',
+        'hardwareback=yes',
+        `useragent=${chromeUA}`,
+      ].join(','));
+      if (!browser) { alert('[IAB] open() returned null/undefined'); return; }
+      browser.addEventListener('exit', () => { onClose?.(); });
+      alert('[IAB] Browser opened successfully');
+    } catch(e) {
+      alert('[IAB] ERROR: ' + String(e));
+    }
     return;
   }
 
