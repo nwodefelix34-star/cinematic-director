@@ -42,8 +42,6 @@ jobs:
         run: |
           echo "=== @capacitor/browser ==="
           ls node_modules/@capacitor/browser/package.json && echo "✅ @capacitor/browser installed" || echo "❌ MISSING"
-          echo "=== @capacitor-community/inappbrowser ==="
-          ls node_modules/@capacitor-community/inappbrowser/package.json && echo "✅ @capacitor-community/inappbrowser installed" || echo "❌ MISSING"
 
       - name: Build React app
         run: |
@@ -66,7 +64,6 @@ jobs:
         run: |
           echo "=== Plugins in capacitor.config ==="
           cat node_modules/@capacitor/browser/package.json | grep '"name"'
-          cat node_modules/@capacitor-community/inappbrowser/package.json | grep '"name"'
           echo "=== Checking android/variables.gradle for plugin entries ==="
           cat android/variables.gradle || echo "(no variables.gradle)"
           echo "=== Checking if plugin Java files exist in android/ ==="
