@@ -163,10 +163,120 @@ public class CineBrowserActivity extends Activity {
         });
 
         /* ── DOWNLOAD INTERCEPTION ────────────────────────────────── */
+        // JavaScript bridge so JS can send blob data back to Java
+        webView.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public void onBlobReady(String base64Data, String mimeType) {
+                // Check for error signal
+                if (mimeType != null && mimeType.startsWith("error:")) {
+                    String msg = mimeType.substring(6);
+                    runOnUiThread(() -> Toast.makeText(CineBrowserActivity.this,
+                        "❌ Blob read failed: " + msg, Toast.LENGTH_LONG).show());
+                    return;
+                }
+                if (base64Data == null || base64Data.isEmpty()) {
+                    runOnUiThread(() -> Toast.makeText(CineBrowserActivity.this,
+                        "❌ Empty data received", Toast.LENGTH_LONG).show());
+                    return;
+                }
+                String safeMime = (mimeType != null && !mimeType.isEmpty()) ? mimeType : "image/jpeg";
+                saveBase64ToFile(base64Data, safeMime);
+            }
+        }, "CineBridge");
+
         webView.setDownloadListener((dlUrl, ua, contentDisposition, mime, len) -> {
+            // Detect mime type from URL if not provided
+            String safeMime = guessMime(dlUrl, mime);
             Toast.makeText(this, "⬇  Saving to Cinematic Director…", Toast.LENGTH_SHORT).show();
-            String finalMime = mime != null && !mime.isEmpty() ? mime : "image/jpeg";
-            new Thread(() -> downloadFile(dlUrl, ua, finalMime)).start();
+
+            if (dlUrl.startsWith("blob:")) {
+                // ── BLOB URL ─────────────────────────────────────────
+                // Lives only in JS memory — inject XHR to read it and pass base64 back to Java
+                String escapedUrl = dlUrl.replace("'", "\'");
+                String escapedMime = safeMime.replace("'", "\'");
+                String js = "(function() {" +
+                    "try {" +
+                    "  var xhr = new XMLHttpRequest();" +
+                    "  xhr.open('GET', '" + escapedUrl + "', true);" +
+                    "  xhr.responseType = 'blob';" +
+                    "  xhr.onload = function() {" +
+                    "    var reader = new FileReader();" +
+                    "    reader.onloadend = function() {" +
+                    "      var b64 = reader.result.split(',')[1];" +
+                    "      var mt = xhr.response.type || '" + escapedMime + "';" +
+                    "      CineBridge.onBlobReady(b64, mt);" +
+                    "    };" +
+                    "    reader.onerror = function() {" +
+                    "      CineBridge.onBlobReady(null, 'error:FileReader failed');" +
+                    "    };" +
+                    "    reader.readAsDataURL(xhr.response);" +
+                    "  };" +
+                    "  xhr.onerror = function() {" +
+                    "    CineBridge.onBlobReady(null, 'error:XHR failed');" +
+                    "  };" +
+                    "  xhr.send();" +
+                    "} catch(e) {" +
+                    "  CineBridge.onBlobReady(null, 'error:' + e.toString());" +
+                    "}" +
+                    "})();";
+                webView.evaluateJavascript(js, null);
+
+            } else if (dlUrl.startsWith("data:")) {
+                // ── DATA URL ─────────────────────────────────────────
+                // Already base64 encoded inline — extract and save directly
+                new Thread(() -> {
+                    try {
+                        String[] parts = dlUrl.split(",", 2);
+                        if (parts.length < 2) throw new Exception("Invalid data URL");
+                        String header = parts[0]; // e.g. "data:image/png;base64"
+                        String b64    = parts[1];
+                        String detectedMime = header.contains(":") && header.contains(";")
+                            ? header.split(":")[1].split(";")[0]
+                            : safeMime;
+                        saveBase64ToFile(b64, detectedMime);
+                    } catch (Exception e) {
+                        runOnUiThread(() -> Toast.makeText(this,
+                            "❌ data: save failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+
+            } else if (dlUrl.startsWith("http://") || dlUrl.startsWith("https://")) {
+                // ── HTTP/HTTPS URL ───────────────────────────────────
+                // Standard download — fetch with HttpURLConnection
+                new Thread(() -> downloadFile(dlUrl, ua, safeMime)).start();
+
+            } else if (dlUrl.startsWith("intent:")) {
+                // ── ANDROID INTENT URL ───────────────────────────────
+                // Extract fallback URL from intent and download that
+                try {
+                    String fallback = "";
+                    for (String part : dlUrl.split(";")) {
+                        if (part.startsWith("S.browser_fallback_url=")) {
+                            fallback = java.net.URLDecoder.decode(
+                                part.substring("S.browser_fallback_url=".length()), "UTF-8");
+                            break;
+                        }
+                    }
+                    if (!fallback.isEmpty()) {
+                        final String fbUrl = fallback;
+                        new Thread(() -> downloadFile(fbUrl, ua, safeMime)).start();
+                    } else {
+                        runOnUiThread(() -> Toast.makeText(this,
+                            "⚠️ Cannot handle intent URL", Toast.LENGTH_SHORT).show());
+                    }
+                } catch (Exception e) {
+                    runOnUiThread(() -> Toast.makeText(this,
+                        "❌ intent: error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                }
+
+            } else {
+                // ── UNKNOWN FORMAT ───────────────────────────────────
+                // Try HTTP download anyway — some URLs use custom schemes
+                // that resolve to HTTP redirects
+                runOnUiThread(() -> Toast.makeText(this,
+                    "⚠️ Unknown URL type, trying download…", Toast.LENGTH_SHORT).show());
+                new Thread(() -> downloadFile(dlUrl, ua, safeMime)).start();
+            }
         });
 
         /* ── ASSEMBLE ─────────────────────────────────────────────── */
@@ -196,26 +306,88 @@ public class CineBrowserActivity extends Activity {
         catch (Exception ignored) { urlLabel.setText(url); }
     }
 
+    // ── HELPERS ──────────────────────────────────────────────────────────────
+
+    /** Guess mime type from URL extension when server doesn't provide one */
+    private String guessMime(String url, String serverMime) {
+        if (serverMime != null && !serverMime.isEmpty()
+                && !serverMime.equals("application/octet-stream")) {
+            return serverMime;
+        }
+        String u = url.toLowerCase().split("\?")[0].split("#")[0];
+        if (u.endsWith(".png"))  return "image/png";
+        if (u.endsWith(".webp")) return "image/webp";
+        if (u.endsWith(".gif"))  return "image/gif";
+        if (u.endsWith(".mp4"))  return "video/mp4";
+        if (u.endsWith(".webm")) return "video/webm";
+        if (u.endsWith(".mov"))  return "video/quicktime";
+        if (u.endsWith(".mp3"))  return "audio/mpeg";
+        if (u.endsWith(".pdf"))  return "application/pdf";
+        if (u.endsWith(".zip"))  return "application/zip";
+        if (u.endsWith(".jpg") || u.endsWith(".jpeg")) return "image/jpeg";
+        return serverMime != null ? serverMime : "application/octet-stream";
+    }
+
+    /** Get file extension from mime type */
+    private String extFromMime(String mime) {
+        if (mime == null) return ".bin";
+        if (mime.contains("png"))       return ".png";
+        if (mime.contains("webp"))      return ".webp";
+        if (mime.contains("gif"))       return ".gif";
+        if (mime.contains("mp4"))       return ".mp4";
+        if (mime.contains("webm"))      return ".webm";
+        if (mime.contains("quicktime")) return ".mov";
+        if (mime.contains("mpeg"))      return ".mp3";
+        if (mime.contains("pdf"))       return ".pdf";
+        if (mime.contains("zip"))       return ".zip";
+        if (mime.contains("jpeg") || mime.contains("jpg")) return ".jpg";
+        return ".bin";
+    }
+
+    /** Decode base64 string, save to app-private cine_downloads folder, broadcast result */
+    private void saveBase64ToFile(String base64Data, String mime) {
+        new Thread(() -> {
+            try {
+                byte[] bytes = android.util.Base64.decode(
+                    base64Data, android.util.Base64.DEFAULT);
+                File dir = new File(getFilesDir(), "cine_downloads");
+                if (!dir.exists()) dir.mkdirs();
+                File out = new File(dir, "cine_" + System.currentTimeMillis() + extFromMime(mime));
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(out);
+                fos.write(bytes);
+                fos.close();
+                runOnUiThread(() -> {
+                    Toast.makeText(CineBrowserActivity.this,
+                        "✅  Saved to Cinematic Director!", Toast.LENGTH_SHORT).show();
+                    broadcast("downloaded", out.getAbsolutePath(), mime);
+                    finish();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(CineBrowserActivity.this,
+                    "❌ Save failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
     private void downloadFile(String dlUrl, String ua, String mime) {
         try {
             URL fileUrl = new URL(dlUrl);
             HttpURLConnection conn = (HttpURLConnection) fileUrl.openConnection();
-            conn.setRequestProperty("User-Agent", ua);
+            conn.setRequestProperty("User-Agent", ua != null ? ua :
+                "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/124.0.0.0");
             conn.setInstanceFollowRedirects(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
             conn.connect();
 
-            // Choose extension from mime type
-            String ext = ".jpg";
-            if      (mime.contains("png"))  ext = ".png";
-            else if (mime.contains("webp")) ext = ".webp";
-            else if (mime.contains("mp4"))  ext = ".mp4";
-            else if (mime.contains("webm")) ext = ".webm";
-            else if (mime.contains("mov"))  ext = ".mov";
+            // Detect mime from Content-Type header if not already known
+            String ct = conn.getContentType();
+            String finalMime = (ct != null && !ct.isEmpty()) ? ct.split(";")[0].trim() : mime;
+            finalMime = guessMime(dlUrl, finalMime);
 
-            // Save to app-private folder — invisible to file managers
             File dir = new File(getFilesDir(), "cine_downloads");
             if (!dir.exists()) dir.mkdirs();
-            File out = new File(dir, "cine_" + System.currentTimeMillis() + ext);
+            File out = new File(dir, "cine_" + System.currentTimeMillis() + extFromMime(finalMime));
 
             InputStream in = conn.getInputStream();
             FileOutputStream fos = new FileOutputStream(out);
@@ -226,18 +398,16 @@ public class CineBrowserActivity extends Activity {
             fos.close();
             conn.disconnect();
 
-            // Notify plugin and close browser
+            final String savedMime = finalMime;
             runOnUiThread(() -> {
-                Toast.makeText(this, "✅  Imported!", Toast.LENGTH_SHORT).show();
-                broadcast("downloaded", out.getAbsolutePath(), mime);
+                Toast.makeText(this, "✅  Saved to Cinematic Director!", Toast.LENGTH_SHORT).show();
+                broadcast("downloaded", out.getAbsolutePath(), savedMime);
                 finish();
             });
 
         } catch (Exception e) {
-            runOnUiThread(() -> {
-                Toast.makeText(this, "❌  Download failed: " + e.getMessage(),
-                    Toast.LENGTH_LONG).show();
-            });
+            runOnUiThread(() -> Toast.makeText(this,
+                "❌ Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
         }
     }
 
