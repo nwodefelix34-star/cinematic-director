@@ -157,26 +157,53 @@ const scanFilesLibrary = async (): Promise<Array<{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// openCapacitorBrowser — dark-themed embedded browser matching the app UI.
-// Uses cordova-plugin-inappbrowser (true WebView, no Chrome switching).
-// Falls back to @capacitor/browser (Chrome Custom Tab) if cordova not loaded.
-// After closing, auto-imports the newest file from phone storage.
+// ─────────────────────────────────────────────────────────────────────────────
+// openCapacitorBrowser — custom native WebView browser (CineBrowser plugin).
+//
+// CineBrowser is our own Capacitor plugin (CineBrowserPlugin.java) that:
+//   ✅ Opens a full-screen WebView with dark toolbar matching the app
+//   ✅ Intercepts downloads before they hit the phone's file system
+//   ✅ Saves files to the app's private /files/cine_downloads/ folder
+//   ✅ Returns the file as a base64 dataUrl directly to JavaScript
+//   ✅ Auto-closes the browser and imports the file into the scene
+//
+// Falls back to @capacitor/browser (Chrome Custom Tab) if CineBrowser
+// hasn't loaded yet (first launch before plugin registers).
 // ─────────────────────────────────────────────────────────────────────────────
 const openCapacitorBrowser = (
   url: string,
-  _title: string,
-  onClose?: () => void,
+  title: string,
+  onFileDownloaded: (dataUrl: string, mimeType: string) => void,
+  onClose: () => void,
 ): void => {
-  // @capacitor/browser opens a Chrome Custom Tab — stays inside the app,
-  // handles Google login natively, user stays logged in between sessions.
-  const CapBrowser = (window as any).Capacitor?.Plugins?.Browser;
-  if (CapBrowser?.open) {
-    CapBrowser.open({ url, presentationStyle: 'fullscreen' });
-    CapBrowser.addListener('browserFinished', () => { onClose?.(); }).catch(() => {});
+  const CineBrowser = (window as any).Capacitor?.Plugins?.CineBrowser;
+
+  if (CineBrowser?.open) {
+    // ── Our custom native plugin ──────────────────────────────────────
+    CineBrowser.open({ url, title });
+
+    CineBrowser.addListener('fileDownloaded', (result: any) => {
+      onFileDownloaded(result.dataUrl, result.mimeType);
+    }).catch(() => {});
+
+    CineBrowser.addListener('browserClosed', () => {
+      onClose();
+    }).catch(() => {});
+
     return;
   }
+
+  // ── Fallback: @capacitor/browser (Chrome Custom Tab) ─────────────────
+  const CapBrowser = (window as any).Capacitor?.Plugins?.Browser;
+  if (CapBrowser?.open) {
+    CapBrowser.open({ url, presentationStyle: 'fullscreen', toolbarColor: '#070709' });
+    CapBrowser.addListener('browserFinished', () => { onClose(); }).catch(() => {});
+    return;
+  }
+
   window.open(url, '_blank');
 };
+
 
 const AVAILABLE_FONTS = [
   { name: 'Inter', value: "'Inter', sans-serif" },
@@ -793,28 +820,19 @@ const App: React.FC = () => {
         navigator.clipboard.writeText(imagePrompt).catch(() => {});
         openCapacitorBrowser(
           'https://labs.google/fx/tools/image-fx',
-          '⬡ Flow',
-          // onClose: auto-scan phone storage for newest image, import directly into scene
-          () => {
+          '⬡ Flow — Cinematic Director',
+          (dataUrl) => {
             setIsBridgeOpen(false);
-            autoImportNewestFile(
-              'image',
-              (dataUrl) => {
-                const sceneId = flowBridgeSceneIdRef.current;
-                if (!sceneId) { setShowMobileImport(true); return; }
-                updateScene(sceneId, {
-                  frames: [{ id: 'frame-flow-' + Date.now(), index: 0,
-                             imageUrl: dataUrl, options: [dataUrl],
-                             duration: project.sceneDuration, type: 'ai' as const }],
-                  status: 'ready',
-                }, true);
-                setBridgeAutoImported(true);
-                setTimeout(() => setBridgeAutoImported(false), 4000);
-              },
-              // fallback: show manual picker if auto-import fails
-              () => setShowMobileImport(true),
-            );
+            const sceneId = flowBridgeSceneIdRef.current;
+            if (!sceneId) return;
+            updateScene(sceneId, {
+              frames: [{ id: 'frame-flow-' + Date.now(), index: 0,
+                         imageUrl: dataUrl, options: [dataUrl],
+                         duration: project.sceneDuration, type: 'ai' as const }],
+              status: 'ready',
+            }, true);
           },
+          () => { setIsBridgeOpen(false); setShowMobileImport(true); },
         );
 
       } else {
@@ -879,19 +897,21 @@ const App: React.FC = () => {
       navigator.clipboard.writeText(videoPrompt).catch(() => {});
       openCapacitorBrowser(
         'https://aistudio.tencent.com/visual',
-        '⬡ Hunyuan',
-        () => {
+        '⬡ Hunyuan — Cinematic Director',
+        (dataUrl, mimeType) => {
           setIsBridgeOpen(false);
-          autoImportNewestFile(
-            'video',
-            (dataUrl) => {
-              updateScene(activeSceneId, { videoUrl: dataUrl, status: 'ready' }, true);
-              setBridgeAutoImported(true);
-              setTimeout(() => setBridgeAutoImported(false), 4000);
-            },
-            () => setShowMobileImport(true),
-          );
+          if (mimeType && mimeType.startsWith('video/')) {
+            updateScene(activeSceneId, { videoUrl: dataUrl, status: 'ready' }, true);
+          } else {
+            updateScene(activeSceneId, {
+              frames: [{ id: 'frame-huy-' + Date.now(), index: 0,
+                         imageUrl: dataUrl, options: [dataUrl],
+                         duration: project.sceneDuration, type: 'ai' as const }],
+              status: 'ready',
+            }, true);
+          }
         },
+        () => { setIsBridgeOpen(false); setShowMobileImport(true); },
       );
 
     } else {
