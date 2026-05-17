@@ -64,6 +64,48 @@ jobs:
           find android -name "InAppBrowser*" 2>/dev/null | head -10 || echo "(not found yet)"
           ls android/capacitor-cordova-android-plugins/ 2>/dev/null || echo "(no cordova plugins dir)"
 
+      - name: Inject CineBrowser native plugin
+        run: |
+          JAVA_DIR=android/app/src/main/java/com/cinematicdirector/app
+
+          # Copy Java files built in repo root
+          cp CineBrowserActivity.java "$JAVA_DIR/CineBrowserActivity.java"
+          cp CineBrowserPlugin.java   "$JAVA_DIR/CineBrowserPlugin.java"
+          echo "✅ Java files copied"
+
+          # Register CineBrowserActivity in AndroidManifest.xml
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "CineBrowserActivity" "$MANIFEST"; then
+            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" android:theme="@style/AppTheme.NoActionBar" />
+    </application>|' "$MANIFEST"
+          fi
+          echo "✅ Manifest patched"
+
+          # Register plugin in MainActivity.java
+          MAIN=android/app/src/main/java/com/cinematicdirector/app/MainActivity.java
+          if ! grep -q "CineBrowserPlugin" "$MAIN"; then
+            # Add import
+            sed -i '/^package/a import com.getcapacitor.BridgeActivity;' "$MAIN" || true
+            # Replace empty class or add registerPlugin in onCreate
+            cat > "$MAIN" << 'MAINEOF'
+package com.cinematicdirector.app;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(CineBrowserPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+}
+MAINEOF
+          fi
+          echo "✅ MainActivity patched"
+          echo "=== MAIN ==="
+          cat "$MAIN"
+
       - name: Force copy dist to Android assets
         run: |
           mkdir -p android/app/src/main/assets/public
