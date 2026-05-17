@@ -38,19 +38,16 @@ jobs:
 
       - name: Verify plugins in node_modules
         run: |
-          echo "=== @capacitor/browser ==="
-          ls node_modules/@capacitor/browser/package.json && echo "✅ installed" || echo "❌ MISSING"
-          echo "=== cordova-plugin-inappbrowser ==="
-          ls node_modules/cordova-plugin-inappbrowser/package.json && echo "✅ installed" || echo "❌ MISSING"
-          echo "=== @capacitor/filesystem ==="
-          ls node_modules/@capacitor/filesystem/package.json && echo "✅ installed" || echo "❌ MISSING"
+          ls node_modules/@capacitor/browser/package.json     && echo "✅ @capacitor/browser"     || echo "❌ MISSING"
+          ls node_modules/@capacitor/filesystem/package.json  && echo "✅ @capacitor/filesystem"  || echo "❌ MISSING"
+          ls node_modules/cordova-plugin-inappbrowser/package.json && echo "✅ cordova-plugin-inappbrowser" || echo "❌ MISSING"
 
       - name: Build React app
         run: npx vite build
         env:
           VITE_BUILD_TARGET: mobile
-          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
-          VITE_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Add Android platform
         run: npx cap add android
@@ -58,53 +55,19 @@ jobs:
       - name: Sync Capacitor + Cordova plugins into Android
         run: npx cap sync android
 
-      - name: Verify cordova plugin registered in Android build
-        run: |
-          echo "=== Cordova plugins registered ==="
-          find android -name "InAppBrowser*" 2>/dev/null | head -10 || echo "(not found yet)"
-          ls android/capacitor-cordova-android-plugins/ 2>/dev/null || echo "(no cordova plugins dir)"
-
       - name: Inject CineBrowser native plugin
         run: |
           JAVA_DIR=android/app/src/main/java/com/cinematicdirector/app
-
-          # Copy Java files built in repo root
           cp CineBrowserActivity.java "$JAVA_DIR/CineBrowserActivity.java"
           cp CineBrowserPlugin.java   "$JAVA_DIR/CineBrowserPlugin.java"
           echo "✅ Java files copied"
-
-          # Register CineBrowserActivity in AndroidManifest.xml
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q "CineBrowserActivity" "$MANIFEST"; then
-            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" android:theme="@style/AppTheme.NoActionBar" />
-    </application>|' "$MANIFEST"
+            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" />\n    </application>|' "$MANIFEST"
           fi
           echo "✅ Manifest patched"
-
-          # Register plugin in MainActivity.java
-          MAIN=android/app/src/main/java/com/cinematicdirector/app/MainActivity.java
-          if ! grep -q "CineBrowserPlugin" "$MAIN"; then
-            # Add import
-            sed -i '/^package/a import com.getcapacitor.BridgeActivity;' "$MAIN" || true
-            # Replace empty class or add registerPlugin in onCreate
-            cat > "$MAIN" << 'MAINEOF'
-package com.cinematicdirector.app;
-
-import android.os.Bundle;
-import com.getcapacitor.BridgeActivity;
-
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(CineBrowserPlugin.class);
-        super.onCreate(savedInstanceState);
-    }
-}
-MAINEOF
-          fi
-          echo "✅ MainActivity patched"
-          echo "=== MAIN ==="
-          cat "$MAIN"
+          python3 patch_mainactivity.py
+          echo "=== MainActivity ===" && cat "$JAVA_DIR/MainActivity.java"
 
       - name: Force copy dist to Android assets
         run: |
