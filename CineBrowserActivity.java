@@ -18,31 +18,27 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashSet;
 
 public class CineBrowserActivity extends Activity {
 
     public static final String EXTRA_URL       = "cine_url";
     public static final String EXTRA_TITLE     = "cine_title";
     public static final String ACTION_EVENT    = "com.cinematicdirector.CINE_EVENT";
-    public static final String EXTRA_EVENT     = "event";       // "downloaded" | "closed" | "minimized"
+    public static final String EXTRA_EVENT     = "event";
     public static final String EXTRA_FILE_PATH = "file_path";
     public static final String EXTRA_MIME      = "mime_type";
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BLOB STORE INJECTION
-    //
-    // ImageFX uses blob: URLs for downloads.  XHR/fetch against blob: URLs is
-    // blocked by the site's Content-Security-Policy (connect-src).
-    //
-    // Fix: inject a URL.createObjectURL override at page-start time, BEFORE
-    // any site JS runs.  Every blob the page creates is stored in
-    // window.__cineBlobStore[url].  When DownloadListener fires we look up the
-    // blob in that store and pass it to FileReader — no network request, no CSP.
+    // BLOB STORE INJECTION (injected via addDocumentStartJavaScript so it runs
+    // BEFORE any page JS — bypasses ImageFX's connect-src CSP entirely).
     // ─────────────────────────────────────────────────────────────────────────
     private static final String BLOB_STORE_JS =
         "(function() {" +
@@ -85,12 +81,12 @@ public class CineBrowserActivity extends Activity {
 
         String startUrl = getIntent().getStringExtra(EXTRA_URL);
 
-        /* ── ROOT ─────────────────────────────────────────────────── */
+        /* ── ROOT ──────────────────────────────────────────────── */
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.parseColor("#070709"));
 
-        /* ── TOOLBAR ──────────────────────────────────────────────── */
+        /* ── TOOLBAR ───────────────────────────────────────────── */
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setBackgroundColor(Color.parseColor("#0a0a0f"));
@@ -105,33 +101,38 @@ public class CineBrowserActivity extends Activity {
         fwdBtn = makeToolbarBtn("→");
         fwdBtn.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); });
 
+        // Reload
+        TextView reloadBtn = makeToolbarBtn("↻");
+        reloadBtn.setOnClickListener(v -> webView.reload());
+
         urlLabel = new TextView(this);
         urlLabel.setTextColor(Color.parseColor("#64748b"));
         urlLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
         urlLabel.setMaxLines(1);
-        urlLabel.setPadding(dp(8), 0, dp(8), 0);
+        urlLabel.setPadding(dp(6), 0, dp(6), 0);
         urlLabel.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams urlLp =
             new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         urlLabel.setLayoutParams(urlLp);
 
-        // Minimize — hides browser without destroying WebView session
-        TextView minBtn = makeToolbarBtn("⊟  Hide");
+        // Hide — minimizes browser, keeps WebView alive in its own task
+        TextView minBtn = makeToolbarBtn("⊟");
         minBtn.setTextColor(Color.parseColor("#94a3b8"));
         minBtn.setOnClickListener(v -> minimizeBrowser());
 
-        // Done — closes browser fully
-        TextView doneBtn = makeToolbarBtn("✓  Done");
+        // Done — fully closes this browser Activity
+        TextView doneBtn = makeToolbarBtn("✓");
         doneBtn.setTextColor(Color.parseColor("#22d3ee"));
         doneBtn.setOnClickListener(v -> finish());
 
         toolbar.addView(backBtn);
         toolbar.addView(fwdBtn);
+        toolbar.addView(reloadBtn);
         toolbar.addView(urlLabel);
         toolbar.addView(minBtn);
         toolbar.addView(doneBtn);
 
-        /* ── PROGRESS BAR ─────────────────────────────────────────── */
+        /* ── PROGRESS BAR ──────────────────────────────────────── */
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
         progress.setProgressTintList(
@@ -140,7 +141,7 @@ public class CineBrowserActivity extends Activity {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(3)));
         progress.setVisibility(View.INVISIBLE);
 
-        /* ── WEBVIEW ──────────────────────────────────────────────── */
+        /* ── WEBVIEW ───────────────────────────────────────────── */
         webView = new WebView(this);
         webView.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -163,6 +164,15 @@ public class CineBrowserActivity extends Activity {
             "AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/124.0.0.0 Mobile Safari/537.36");
 
+        // ── TRUE DOCUMENT-START INJECTION via androidx.webkit ──────────────
+        // WebViewCompat.addDocumentStartJavaScript() runs our script
+        // synchronously BEFORE any page JS, so the createObjectURL override
+        // is always in place before ImageFX's code runs.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(webView, BLOB_STORE_JS,
+                new HashSet<>(java.util.Arrays.asList("*")));
+        }
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onProgressChanged(WebView view, int p) {
                 progress.setProgress(p);
@@ -175,13 +185,17 @@ public class CineBrowserActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                // Inject blob store override BEFORE any site JS runs.
-                view.evaluateJavascript(BLOB_STORE_JS, null);
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap fav) {
+                // Fallback injection for older WebView versions that don't support
+                // addDocumentStartJavaScript (evaluateJavascript is still async but
+                // better than nothing on older devices).
+                if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    view.evaluateJavascript(BLOB_STORE_JS, null);
+                }
             }
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Re-inject after SPA navigation / history pushState
+                // Re-apply on SPA navigation (pushState doesn't trigger onPageStarted)
                 view.evaluateJavascript(BLOB_STORE_JS, null);
                 updateUrlLabel(url);
                 backBtn.setAlpha(view.canGoBack()    ? 1f : 0.3f);
@@ -189,7 +203,7 @@ public class CineBrowserActivity extends Activity {
             }
         });
 
-        /* ── JAVASCRIPT BRIDGE ────────────────────────────────────── */
+        /* ── JAVASCRIPT BRIDGE ─────────────────────────────────── */
         webView.addJavascriptInterface(new Object() {
             @android.webkit.JavascriptInterface
             public void onBlobReady(String base64Data, String mimeType) {
@@ -209,19 +223,16 @@ public class CineBrowserActivity extends Activity {
             }
         }, "CineBridge");
 
-        /* ── DOWNLOAD INTERCEPTION ────────────────────────────────── */
+        /* ── DOWNLOAD INTERCEPTION ─────────────────────────────── */
         webView.setDownloadListener((dlUrl, ua, contentDisposition, mime, len) -> {
             String safeMime = guessMime(dlUrl, mime);
             Toast.makeText(this, "⬇  Saving to Cinematic Director…", Toast.LENGTH_SHORT).show();
 
             if (dlUrl.startsWith("blob:")) {
-                // ── BLOB URL ──────────────────────────────────────────────
-                // Primary path: look up blob in our intercepted store.
-                // FileReader works on in-memory blobs without any network
-                // request, so ImageFX's connect-src CSP cannot block it.
-                // Fallback: fetch() in case the store missed the blob.
                 String esc  = dlUrl.replace("\\", "\\\\").replace("'", "\\'");
                 String escM = safeMime.replace("'", "\\'");
+                // Primary: read from our blob store (no network, no CSP issue)
+                // Fallback: fetch() in case store was missed
                 String js =
                     "(function() {" +
                     "  try {" +
@@ -232,7 +243,6 @@ public class CineBrowserActivity extends Activity {
                     "      r.onerror   = function() { CineBridge.onBlobReady(null, 'error:FileReader failed'); };" +
                     "      r.readAsDataURL(b);" +
                     "    } else {" +
-                    // Fallback: fetch (works only if CSP allows it, otherwise gives a useful error message)
                     "      fetch('" + esc + "')" +
                     "        .then(function(res) { return res.blob(); })" +
                     "        .then(function(b2) {" +
@@ -287,13 +297,12 @@ public class CineBrowserActivity extends Activity {
                     runOnUiThread(() -> Toast.makeText(this,
                         "❌ intent: error: " + e.getMessage(), Toast.LENGTH_LONG).show());
                 }
-
             } else {
                 new Thread(() -> downloadFile(dlUrl, ua, safeMime)).start();
             }
         });
 
-        /* ── ASSEMBLE ─────────────────────────────────────────────── */
+        /* ── ASSEMBLE ──────────────────────────────────────────── */
         root.addView(toolbar);
         root.addView(progress);
         root.addView(webView);
@@ -302,7 +311,7 @@ public class CineBrowserActivity extends Activity {
         if (startUrl != null) webView.loadUrl(startUrl);
     }
 
-    /** Called when Activity is brought back to front (singleTask + REORDER_TO_FRONT). */
+    /** Called when the Activity is re-launched via REORDER_TO_FRONT (singleTask). */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -313,23 +322,28 @@ public class CineBrowserActivity extends Activity {
             if (!newUrl.equals(current)) {
                 webView.loadUrl(newUrl);
             }
+            // If same URL — just bring to front, don't reload. Session preserved.
         }
     }
 
-    /** Hide browser without destroying WebView session. */
+    /**
+     * Hides this Activity WITHOUT destroying the WebView.
+     * Because taskAffinity="" puts us in a separate task, moveTaskToBack(true)
+     * only backgrounds the BROWSER task — the main app stays fully active.
+     */
     private void minimizeBrowser() {
         broadcast("minimized", "", "");
         moveTaskToBack(true);
     }
 
-    /* ── PRIVATE HELPERS ─────────────────────────────────────────────────── */
+    /* ── PRIVATE HELPERS ─────────────────────────────────────────── */
 
     private TextView makeToolbarBtn(String label) {
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextColor(Color.parseColor("#94a3b8"));
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        tv.setPadding(dp(12), dp(8), dp(12), dp(8));
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        tv.setPadding(dp(10), dp(8), dp(10), dp(8));
         tv.setGravity(Gravity.CENTER);
         return tv;
     }
@@ -424,7 +438,7 @@ public class CineBrowserActivity extends Activity {
 
             final String savedMime = finalMime;
             runOnUiThread(() -> {
-                Toast.makeText(this, "✅  Saved to Cinematic Director!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "✅  Saved!", Toast.LENGTH_SHORT).show();
                 broadcast("downloaded", out.getAbsolutePath(), savedMime);
                 finish();
             });
@@ -445,7 +459,7 @@ public class CineBrowserActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
-        else minimizeBrowser(); // Back = minimize, preserves session
+        else minimizeBrowser(); // back = minimize, preserves session
     }
 
     @Override
