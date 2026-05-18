@@ -63,7 +63,7 @@ jobs:
           echo "✅ Java files copied"
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q "CineBrowserActivity" "$MANIFEST"; then
-            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" />\n    </application>|' "$MANIFEST"
+            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" android:launchMode="singleTask" />\n    </application>|' "$MANIFEST"
           fi
           echo "✅ Manifest patched"
           python3 patch_mainactivity.py
