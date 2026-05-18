@@ -314,7 +314,7 @@ public class CineBrowserActivity extends Activity {
                 && !serverMime.equals("application/octet-stream")) {
             return serverMime;
         }
-        String u = url.toLowerCase().split("\?")[0].split("#")[0];
+        String u = url.toLowerCase().split("[?]")[0].split("#")[0];
         if (u.endsWith(".png"))  return "image/png";
         if (u.endsWith(".webp")) return "image/webp";
         if (u.endsWith(".gif"))  return "image/gif";
