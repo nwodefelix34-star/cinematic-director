@@ -348,10 +348,11 @@ const App: React.FC = () => {
 
   // ── Bridge state ─────────────────────────────────────────────
   // Shared
-  const [isBridgeOpen,      setIsBridgeOpen]      = useState(false);
-  const [bridgeMode,        setBridgeMode]         = useState<'flow' | 'hunyuan'>('flow');
-  const [bridgeAutoImported,setBridgeAutoImported] = useState(false);
-  const [bridgeCurrentUrl,  setBridgeCurrentUrl]   = useState('');
+  const [isBridgeOpen,        setIsBridgeOpen]        = useState(false);
+  const [isBrowserMinimized,  setIsBrowserMinimized]  = useState(false); // browser alive but hidden
+  const [bridgeMode,          setBridgeMode]           = useState<'flow' | 'hunyuan'>('flow');
+  const [bridgeAutoImported,  setBridgeAutoImported]   = useState(false);
+  const [bridgeCurrentUrl,    setBridgeCurrentUrl]     = useState('');
   // Flow
   const [isFlowBridgeOpen,  setIsFlowBridgeOpen]  = useState(false); // web fallback only
   const [flowBridgePrompt,  setFlowBridgePrompt]  = useState('');
@@ -876,7 +877,7 @@ const App: React.FC = () => {
           'https://labs.google/fx/tools/image-fx',
           '⬡ Flow — Cinematic Director',
           (dataUrl) => {
-            setIsBridgeOpen(false);
+            setIsBridgeOpen(false); setIsBrowserMinimized(false);
             const sceneId = flowBridgeSceneIdRef.current;
             if (!sceneId) return;
             updateScene(sceneId, {
@@ -886,8 +887,8 @@ const App: React.FC = () => {
               status: 'ready',
             }, true);
           },
-          () => { setIsBridgeOpen(false); setShowMobileImport(true); },
-          () => { /* browser minimized — keep isBridgeOpen=true so indicator stays */ },
+          () => { setIsBridgeOpen(false); setIsBrowserMinimized(false); setShowMobileImport(true); },
+          () => { setIsBrowserMinimized(true); }, // browser minimized — show resume pill
         );
 
       } else {
@@ -923,7 +924,7 @@ const App: React.FC = () => {
       }, true);
       setIsFlowBridgeOpen(false);
       setShowMobileImport(false);
-      setIsBridgeOpen(false);
+      setIsBridgeOpen(false); setIsBrowserMinimized(false);
     };
     reader.readAsDataURL(file);
   };
@@ -954,7 +955,7 @@ const App: React.FC = () => {
         'https://aistudio.tencent.com/visual',
         '⬡ Hunyuan — Cinematic Director',
         (dataUrl, mimeType) => {
-          setIsBridgeOpen(false);
+          setIsBridgeOpen(false); setIsBrowserMinimized(false);
           if (mimeType && mimeType.startsWith('video/')) {
             updateScene(activeSceneId, { videoUrl: dataUrl, status: 'ready' }, true);
           } else {
@@ -966,8 +967,8 @@ const App: React.FC = () => {
             }, true);
           }
         },
-        () => { setIsBridgeOpen(false); setShowMobileImport(true); },
-        () => { /* browser minimized — keep isBridgeOpen=true */ },
+        () => { setIsBridgeOpen(false); setIsBrowserMinimized(false); setShowMobileImport(true); },
+        () => { setIsBrowserMinimized(true); }, // browser minimized — show resume pill
       );
 
     } else {
@@ -988,7 +989,7 @@ const App: React.FC = () => {
     updateScene(activeSceneId, { videoUrl: URL.createObjectURL(file), status: 'ready' }, true);
     setIsHunyuanBridgeOpen(false);
     setShowMobileImport(false);
-    setIsBridgeOpen(false);
+    setIsBridgeOpen(false); setIsBrowserMinimized(false);
   };
 
   const handleGenerateVideo = async (id: string) => {
@@ -1244,18 +1245,18 @@ const App: React.FC = () => {
     <div className={`flex flex-col overflow-hidden bg-[#050507] text-[#f1f5f9] ${isResizingTimeline ? 'cursor-row-resize' : ''}`} style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)', maxHeight: 'var(--app-h, 100dvh)' }}>
 
       {/* HEADER */}
-      <header className="h-14 border-b border-white/5 flex items-center justify-between px-5 bg-[#0a0a0f] shrink-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-500 via-cyan-400 to-blue-500 flex items-center justify-center">
+      <header className="h-14 border-b border-white/5 flex items-center justify-between px-3 bg-[#0a0a0f] shrink-0 z-50 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-500 via-cyan-400 to-blue-500 flex items-center justify-center shrink-0">
             <i className="fas fa-cube text-white text-xs"></i>
           </div>
-          <input value={project.title} onFocus={saveToHistory} onChange={e => setProject({ ...project, title: e.target.value })} className="text-[10px] font-black uppercase tracking-widest bg-transparent border-none outline-none text-slate-500 focus:text-white w-48 truncate" />
+          <input value={project.title} onFocus={saveToHistory} onChange={e => setProject({ ...project, title: e.target.value })} className="text-[9px] font-black uppercase tracking-widest bg-transparent border-none outline-none text-slate-500 focus:text-white w-28 sm:w-48 truncate" />
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setAppMode('channels')} className="text-[8px] font-black uppercase tracking-widest text-slate-600 hover:text-white px-3 py-1.5 rounded-lg border border-white/5 hover:border-white/10 transition-all">
-            Channels
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => setAppMode('channels')} className="text-[8px] font-black uppercase tracking-widest text-slate-600 hover:text-white px-2 py-1.5 rounded-lg border border-white/5 hover:border-white/10 transition-all whitespace-nowrap">
+            Ch
           </button>
-          <button onClick={() => { setIsRenderModalOpen(true); setRenderingStatus(RenderingStatus.IDLE); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">
+          <button onClick={() => { setIsRenderModalOpen(true); setRenderingStatus(RenderingStatus.IDLE); }} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap">
             Render
           </button>
         </div>
@@ -1317,7 +1318,7 @@ const App: React.FC = () => {
                 </span>
               </div>
               <button
-                onClick={() => { window.electronAPI!.hideBridge(); setIsBridgeOpen(false); }}
+                onClick={() => { window.electronAPI!.hideBridge(); setIsBridgeOpen(false); setIsBrowserMinimized(false); }}
                 className="text-slate-500 hover:text-white transition-colors"
               >✕</button>
             </div>
@@ -2004,6 +2005,32 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* ── FLOATING BROWSER RESUME PILL ────────────────────────────────────
+          Shows when the CineBrowser is minimized (alive in background).
+          Tapping it brings the browser back to front without reloading.
+      ─────────────────────────────────────────────────────────────────────── */}
+      {isBrowserMinimized && isCapacitorApp() && (
+        <button
+          onClick={() => {
+            const CineBrowser = (window as any).Capacitor?.Plugins?.CineBrowser;
+            if (CineBrowser?.open) {
+              // Re-call open() — REORDER_TO_FRONT brings existing session to front
+              const url = bridgeMode === 'hunyuan'
+                ? 'https://aistudio.tencent.com/visual'
+                : 'https://labs.google/fx/tools/image-fx';
+              CineBrowser.open({ url, title: bridgeMode === 'hunyuan' ? '⬡ Hunyuan' : '⬡ Flow' });
+              setIsBrowserMinimized(false);
+            }
+          }}
+          className="fixed bottom-[calc(var(--timeline-h,180px)+16px)] left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-4 py-2 bg-[#0a0a0f] border border-cyan-400/40 rounded-full shadow-2xl shadow-cyan-400/20 text-cyan-400 text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400/10 active:scale-95 transition-all"
+          style={{ boxShadow: '0 0 20px rgba(34,211,238,0.2)' }}
+        >
+          <i className="fas fa-globe text-xs"></i>
+          <span>{bridgeMode === 'hunyuan' ? 'Hunyuan' : 'Flow'} — Resume Browser</span>
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        </button>
+      )}
 
       {/* Timeline resize handle */}
       <div
