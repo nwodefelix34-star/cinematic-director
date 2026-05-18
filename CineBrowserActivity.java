@@ -8,25 +8,18 @@ import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.DownloadListener;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -36,9 +29,38 @@ public class CineBrowserActivity extends Activity {
     public static final String EXTRA_URL       = "cine_url";
     public static final String EXTRA_TITLE     = "cine_title";
     public static final String ACTION_EVENT    = "com.cinematicdirector.CINE_EVENT";
-    public static final String EXTRA_EVENT     = "event";       // "downloaded" | "closed"
+    public static final String EXTRA_EVENT     = "event";       // "downloaded" | "closed" | "minimized"
     public static final String EXTRA_FILE_PATH = "file_path";
     public static final String EXTRA_MIME      = "mime_type";
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // BLOB STORE INJECTION
+    //
+    // ImageFX uses blob: URLs for downloads.  XHR/fetch against blob: URLs is
+    // blocked by the site's Content-Security-Policy (connect-src).
+    //
+    // Fix: inject a URL.createObjectURL override at page-start time, BEFORE
+    // any site JS runs.  Every blob the page creates is stored in
+    // window.__cineBlobStore[url].  When DownloadListener fires we look up the
+    // blob in that store and pass it to FileReader — no network request, no CSP.
+    // ─────────────────────────────────────────────────────────────────────────
+    private static final String BLOB_STORE_JS =
+        "(function() {" +
+        "  if (window.__CineBlobStoreInstalled) return;" +
+        "  window.__CineBlobStoreInstalled = true;" +
+        "  window.__cineBlobStore = {};" +
+        "  var _orig = URL.createObjectURL.bind(URL);" +
+        "  URL.createObjectURL = function(blob) {" +
+        "    var url = _orig(blob);" +
+        "    window.__cineBlobStore[url] = blob;" +
+        "    return url;" +
+        "  };" +
+        "  var _rev = URL.revokeObjectURL.bind(URL);" +
+        "  URL.revokeObjectURL = function(url) {" +
+        "    delete window.__cineBlobStore[url];" +
+        "    _rev(url);" +
+        "  };" +
+        "})();";
 
     private WebView     webView;
     private ProgressBar progress;
@@ -46,7 +68,6 @@ public class CineBrowserActivity extends Activity {
     private TextView    backBtn;
     private TextView    fwdBtn;
 
-    // dp → px helper
     private int dp(int v) {
         return Math.round(TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, v,
@@ -57,7 +78,6 @@ public class CineBrowserActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Full-screen, status bar matches toolbar
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                              WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -79,15 +99,12 @@ public class CineBrowserActivity extends Activity {
         toolbar.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
-        // ← back
         backBtn = makeToolbarBtn("←");
         backBtn.setOnClickListener(v -> { if (webView.canGoBack()) webView.goBack(); });
 
-        // → forward
         fwdBtn = makeToolbarBtn("→");
         fwdBtn.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); });
 
-        // URL label (centre, flexible)
         urlLabel = new TextView(this);
         urlLabel.setTextColor(Color.parseColor("#64748b"));
         urlLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
@@ -98,7 +115,12 @@ public class CineBrowserActivity extends Activity {
             new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         urlLabel.setLayoutParams(urlLp);
 
-        // ✓ Done
+        // Minimize — hides browser without destroying WebView session
+        TextView minBtn = makeToolbarBtn("⊟  Hide");
+        minBtn.setTextColor(Color.parseColor("#94a3b8"));
+        minBtn.setOnClickListener(v -> minimizeBrowser());
+
+        // Done — closes browser fully
         TextView doneBtn = makeToolbarBtn("✓  Done");
         doneBtn.setTextColor(Color.parseColor("#22d3ee"));
         doneBtn.setOnClickListener(v -> finish());
@@ -106,11 +128,11 @@ public class CineBrowserActivity extends Activity {
         toolbar.addView(backBtn);
         toolbar.addView(fwdBtn);
         toolbar.addView(urlLabel);
+        toolbar.addView(minBtn);
         toolbar.addView(doneBtn);
 
         /* ── PROGRESS BAR ─────────────────────────────────────────── */
-        progress = new ProgressBar(this, null,
-            android.R.attr.progressBarStyleHorizontal);
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
         progress.setProgressTintList(
             android.content.res.ColorStateList.valueOf(Color.parseColor("#22d3ee")));
@@ -135,39 +157,42 @@ public class CineBrowserActivity extends Activity {
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         ws.setAllowFileAccess(true);
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
-        // Chrome UA — required for Google OAuth / ImageFX login
+        // Chrome UA — required for Google OAuth and ImageFX
         ws.setUserAgentString(
             "Mozilla/5.0 (Linux; Android 10; Mobile) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/124.0.0.0 Mobile Safari/537.36");
 
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int p) {
+            @Override public void onProgressChanged(WebView view, int p) {
                 progress.setProgress(p);
                 progress.setVisibility(p == 100 ? View.INVISIBLE : View.VISIBLE);
             }
-            @Override
-            public void onReceivedTitle(WebView view, String title) {
+            @Override public void onReceivedTitle(WebView view, String title) {
                 updateUrlLabel(view.getUrl());
             }
         });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                // Inject blob store override BEFORE any site JS runs.
+                view.evaluateJavascript(BLOB_STORE_JS, null);
+            }
+            @Override
             public void onPageFinished(WebView view, String url) {
+                // Re-inject after SPA navigation / history pushState
+                view.evaluateJavascript(BLOB_STORE_JS, null);
                 updateUrlLabel(url);
                 backBtn.setAlpha(view.canGoBack()    ? 1f : 0.3f);
                 fwdBtn.setAlpha( view.canGoForward() ? 1f : 0.3f);
             }
         });
 
-        /* ── DOWNLOAD INTERCEPTION ────────────────────────────────── */
-        // JavaScript bridge so JS can send blob data back to Java
+        /* ── JAVASCRIPT BRIDGE ────────────────────────────────────── */
         webView.addJavascriptInterface(new Object() {
             @android.webkit.JavascriptInterface
             public void onBlobReady(String base64Data, String mimeType) {
-                // Check for error signal
                 if (mimeType != null && mimeType.startsWith("error:")) {
                     String msg = mimeType.substring(6);
                     runOnUiThread(() -> Toast.makeText(CineBrowserActivity.this,
@@ -184,55 +209,53 @@ public class CineBrowserActivity extends Activity {
             }
         }, "CineBridge");
 
+        /* ── DOWNLOAD INTERCEPTION ────────────────────────────────── */
         webView.setDownloadListener((dlUrl, ua, contentDisposition, mime, len) -> {
-            // Detect mime type from URL if not provided
             String safeMime = guessMime(dlUrl, mime);
             Toast.makeText(this, "⬇  Saving to Cinematic Director…", Toast.LENGTH_SHORT).show();
 
             if (dlUrl.startsWith("blob:")) {
-                // ── BLOB URL ─────────────────────────────────────────
-                // Lives only in JS memory — inject XHR to read it and pass base64 back to Java
-                String escapedUrl = dlUrl.replace("'", "\'");
-                String escapedMime = safeMime.replace("'", "\'");
-                String js = "(function() {" +
-                    "try {" +
-                    "  var xhr = new XMLHttpRequest();" +
-                    "  xhr.open('GET', '" + escapedUrl + "', true);" +
-                    "  xhr.responseType = 'blob';" +
-                    "  xhr.onload = function() {" +
-                    "    var reader = new FileReader();" +
-                    "    reader.onloadend = function() {" +
-                    "      var b64 = reader.result.split(',')[1];" +
-                    "      var mt = xhr.response.type || '" + escapedMime + "';" +
-                    "      CineBridge.onBlobReady(b64, mt);" +
-                    "    };" +
-                    "    reader.onerror = function() {" +
-                    "      CineBridge.onBlobReady(null, 'error:FileReader failed');" +
-                    "    };" +
-                    "    reader.readAsDataURL(xhr.response);" +
-                    "  };" +
-                    "  xhr.onerror = function() {" +
-                    "    CineBridge.onBlobReady(null, 'error:XHR failed');" +
-                    "  };" +
-                    "  xhr.send();" +
-                    "} catch(e) {" +
-                    "  CineBridge.onBlobReady(null, 'error:' + e.toString());" +
-                    "}" +
+                // ── BLOB URL ──────────────────────────────────────────────
+                // Primary path: look up blob in our intercepted store.
+                // FileReader works on in-memory blobs without any network
+                // request, so ImageFX's connect-src CSP cannot block it.
+                // Fallback: fetch() in case the store missed the blob.
+                String esc  = dlUrl.replace("\\", "\\\\").replace("'", "\\'");
+                String escM = safeMime.replace("'", "\\'");
+                String js =
+                    "(function() {" +
+                    "  try {" +
+                    "    var b = window.__cineBlobStore && window.__cineBlobStore['" + esc + "'];" +
+                    "    if (b) {" +
+                    "      var r = new FileReader();" +
+                    "      r.onloadend = function() { CineBridge.onBlobReady(r.result.split(',')[1], b.type || '" + escM + "'); };" +
+                    "      r.onerror   = function() { CineBridge.onBlobReady(null, 'error:FileReader failed'); };" +
+                    "      r.readAsDataURL(b);" +
+                    "    } else {" +
+                    // Fallback: fetch (works only if CSP allows it, otherwise gives a useful error message)
+                    "      fetch('" + esc + "')" +
+                    "        .then(function(res) { return res.blob(); })" +
+                    "        .then(function(b2) {" +
+                    "          var r2 = new FileReader();" +
+                    "          r2.onloadend = function() { CineBridge.onBlobReady(r2.result.split(',')[1], b2.type || '" + escM + "'); };" +
+                    "          r2.onerror   = function() { CineBridge.onBlobReady(null, 'error:FileReader(fetch) failed'); };" +
+                    "          r2.readAsDataURL(b2);" +
+                    "        })" +
+                    "        .catch(function(e) { CineBridge.onBlobReady(null, 'error:fetch: ' + e.message); });" +
+                    "    }" +
+                    "  } catch(e) { CineBridge.onBlobReady(null, 'error:' + e.toString()); }" +
                     "})();";
                 webView.evaluateJavascript(js, null);
 
             } else if (dlUrl.startsWith("data:")) {
-                // ── DATA URL ─────────────────────────────────────────
-                // Already base64 encoded inline — extract and save directly
                 new Thread(() -> {
                     try {
                         String[] parts = dlUrl.split(",", 2);
                         if (parts.length < 2) throw new Exception("Invalid data URL");
-                        String header = parts[0]; // e.g. "data:image/png;base64"
+                        String header = parts[0];
                         String b64    = parts[1];
                         String detectedMime = header.contains(":") && header.contains(";")
-                            ? header.split(":")[1].split(";")[0]
-                            : safeMime;
+                            ? header.split(":")[1].split(";")[0] : safeMime;
                         saveBase64ToFile(b64, detectedMime);
                     } catch (Exception e) {
                         runOnUiThread(() -> Toast.makeText(this,
@@ -241,13 +264,9 @@ public class CineBrowserActivity extends Activity {
                 }).start();
 
             } else if (dlUrl.startsWith("http://") || dlUrl.startsWith("https://")) {
-                // ── HTTP/HTTPS URL ───────────────────────────────────
-                // Standard download — fetch with HttpURLConnection
                 new Thread(() -> downloadFile(dlUrl, ua, safeMime)).start();
 
             } else if (dlUrl.startsWith("intent:")) {
-                // ── ANDROID INTENT URL ───────────────────────────────
-                // Extract fallback URL from intent and download that
                 try {
                     String fallback = "";
                     for (String part : dlUrl.split(";")) {
@@ -258,8 +277,8 @@ public class CineBrowserActivity extends Activity {
                         }
                     }
                     if (!fallback.isEmpty()) {
-                        final String fbUrl = fallback;
-                        new Thread(() -> downloadFile(fbUrl, ua, safeMime)).start();
+                        final String fb = fallback;
+                        new Thread(() -> downloadFile(fb, ua, safeMime)).start();
                     } else {
                         runOnUiThread(() -> Toast.makeText(this,
                             "⚠️ Cannot handle intent URL", Toast.LENGTH_SHORT).show());
@@ -270,11 +289,6 @@ public class CineBrowserActivity extends Activity {
                 }
 
             } else {
-                // ── UNKNOWN FORMAT ───────────────────────────────────
-                // Try HTTP download anyway — some URLs use custom schemes
-                // that resolve to HTTP redirects
-                runOnUiThread(() -> Toast.makeText(this,
-                    "⚠️ Unknown URL type, trying download…", Toast.LENGTH_SHORT).show());
                 new Thread(() -> downloadFile(dlUrl, ua, safeMime)).start();
             }
         });
@@ -288,7 +302,27 @@ public class CineBrowserActivity extends Activity {
         if (startUrl != null) webView.loadUrl(startUrl);
     }
 
-    /* ── HELPERS ────────────────────────────────────────────────────── */
+    /** Called when Activity is brought back to front (singleTask + REORDER_TO_FRONT). */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String newUrl = intent.getStringExtra(EXTRA_URL);
+        if (newUrl != null && !newUrl.isEmpty() && webView != null) {
+            String current = webView.getUrl();
+            if (!newUrl.equals(current)) {
+                webView.loadUrl(newUrl);
+            }
+        }
+    }
+
+    /** Hide browser without destroying WebView session. */
+    private void minimizeBrowser() {
+        broadcast("minimized", "", "");
+        moveTaskToBack(true);
+    }
+
+    /* ── PRIVATE HELPERS ─────────────────────────────────────────────────── */
 
     private TextView makeToolbarBtn(String label) {
         TextView tv = new TextView(this);
@@ -306,14 +340,9 @@ public class CineBrowserActivity extends Activity {
         catch (Exception ignored) { urlLabel.setText(url); }
     }
 
-    // ── HELPERS ──────────────────────────────────────────────────────────────
-
-    /** Guess mime type from URL extension when server doesn't provide one */
     private String guessMime(String url, String serverMime) {
         if (serverMime != null && !serverMime.isEmpty()
-                && !serverMime.equals("application/octet-stream")) {
-            return serverMime;
-        }
+                && !serverMime.equals("application/octet-stream")) return serverMime;
         String u = url.toLowerCase().split("[?]")[0].split("#")[0];
         if (u.endsWith(".png"))  return "image/png";
         if (u.endsWith(".webp")) return "image/webp";
@@ -328,7 +357,6 @@ public class CineBrowserActivity extends Activity {
         return serverMime != null ? serverMime : "application/octet-stream";
     }
 
-    /** Get file extension from mime type */
     private String extFromMime(String mime) {
         if (mime == null) return ".bin";
         if (mime.contains("png"))       return ".png";
@@ -344,16 +372,14 @@ public class CineBrowserActivity extends Activity {
         return ".bin";
     }
 
-    /** Decode base64 string, save to app-private cine_downloads folder, broadcast result */
     private void saveBase64ToFile(String base64Data, String mime) {
         new Thread(() -> {
             try {
-                byte[] bytes = android.util.Base64.decode(
-                    base64Data, android.util.Base64.DEFAULT);
+                byte[] bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
                 File dir = new File(getFilesDir(), "cine_downloads");
                 if (!dir.exists()) dir.mkdirs();
                 File out = new File(dir, "cine_" + System.currentTimeMillis() + extFromMime(mime));
-                java.io.FileOutputStream fos = new java.io.FileOutputStream(out);
+                FileOutputStream fos = new FileOutputStream(out);
                 fos.write(bytes);
                 fos.close();
                 runOnUiThread(() -> {
@@ -380,7 +406,6 @@ public class CineBrowserActivity extends Activity {
             conn.setReadTimeout(30000);
             conn.connect();
 
-            // Detect mime from Content-Type header if not already known
             String ct = conn.getContentType();
             String finalMime = (ct != null && !ct.isEmpty()) ? ct.split(";")[0].trim() : mime;
             finalMime = guessMime(dlUrl, finalMime);
@@ -394,8 +419,7 @@ public class CineBrowserActivity extends Activity {
             byte[] buf = new byte[8192];
             int n;
             while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
-            in.close();
-            fos.close();
+            in.close(); fos.close();
             conn.disconnect();
 
             final String savedMime = finalMime;
@@ -404,7 +428,6 @@ public class CineBrowserActivity extends Activity {
                 broadcast("downloaded", out.getAbsolutePath(), savedMime);
                 finish();
             });
-
         } catch (Exception e) {
             runOnUiThread(() -> Toast.makeText(this,
                 "❌ Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
@@ -422,13 +445,12 @@ public class CineBrowserActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
-        else finish();
+        else minimizeBrowser(); // Back = minimize, preserves session
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Always broadcast close so plugin can clean up
         broadcast("closed", "", "");
     }
 }

@@ -20,16 +20,50 @@ import java.io.IOException;
 public class CineBrowserPlugin extends Plugin {
 
     private BroadcastReceiver receiver;
+    private boolean browserAlive = false; // true while Activity is open or minimized
 
     @PluginMethod
     public void open(PluginCall call) {
         String url   = call.getString("url",   "https://labs.google/fx/tools/image-fx");
         String title = call.getString("title", "Cinematic Director");
 
-        // Clean up any previous receiver
-        unregisterReceiver();
+        // Register a fresh receiver (unregister any stale one first)
+        if (!browserAlive) {
+            unregisterReceiver();
+            registerEventReceiver();
+        }
 
-        // Register receiver for events from CineBrowserActivity
+        // Launch (or bring-to-front if already minimized via singleTask + REORDER_TO_FRONT)
+        Intent i = new Intent(getContext(), CineBrowserActivity.class);
+        i.putExtra(CineBrowserActivity.EXTRA_URL,   url);
+        i.putExtra(CineBrowserActivity.EXTRA_TITLE, title);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        getContext().startActivity(i);
+
+        browserAlive = true;
+        call.resolve();
+    }
+
+    /**
+     * Bring a minimized browser back to front without reloading.
+     * Call this instead of open() when browserAlive is true and you just
+     * want to un-hide the browser (e.g., user taps "Generate Frame" again
+     * for a scene that already has a session in progress).
+     */
+    @PluginMethod
+    public void show(PluginCall call) {
+        if (!browserAlive) {
+            // Browser was closed — fall back to open()
+            call.reject("browser_not_alive");
+            return;
+        }
+        Intent i = new Intent(getContext(), CineBrowserActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        getContext().startActivity(i);
+        call.resolve();
+    }
+
+    private void registerEventReceiver() {
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context ctx, Intent intent) {
@@ -38,10 +72,9 @@ public class CineBrowserPlugin extends Plugin {
                 String mime  = intent.getStringExtra(CineBrowserActivity.EXTRA_MIME);
 
                 if ("downloaded".equals(event) && path != null && !path.isEmpty()) {
-                    // Read file → base64 → send to JS
                     try {
-                        byte[] bytes = readFile(new File(path));
-                        String b64   = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                        byte[] bytes  = readFile(new File(path));
+                        String b64    = Base64.encodeToString(bytes, Base64.NO_WRAP);
                         String dataUrl = "data:" + mime + ";base64," + b64;
 
                         JSObject result = new JSObject();
@@ -54,12 +87,29 @@ public class CineBrowserPlugin extends Plugin {
                         err.put("message", e.getMessage());
                         notifyListeners("downloadError", err);
                     }
-                } else {
-                    // Browser closed without download
-                    notifyListeners("browserClosed", new JSObject());
-                }
+                    // After a successful download the Activity closes itself,
+                    // so the browser is no longer alive.
+                    browserAlive = false;
+                    unregisterReceiver();
 
-                unregisterReceiver();
+                } else if ("minimized".equals(event)) {
+                    // Browser is hidden but WebView is still alive — keep receiver registered
+                    // so we can catch a future download event.
+                    JSObject payload = new JSObject();
+                    notifyListeners("browserMinimized", payload);
+                    // browserAlive stays true
+
+                } else if ("closed".equals(event)) {
+                    browserAlive = false;
+                    notifyListeners("browserClosed", new JSObject());
+                    unregisterReceiver();
+
+                } else {
+                    // Unexpected / unknown event — treat as closed
+                    browserAlive = false;
+                    notifyListeners("browserClosed", new JSObject());
+                    unregisterReceiver();
+                }
             }
         };
 
@@ -69,15 +119,6 @@ public class CineBrowserPlugin extends Plugin {
         } else {
             getContext().registerReceiver(receiver, filter);
         }
-
-        // Launch the custom browser activity
-        Intent i = new Intent(getContext(), CineBrowserActivity.class);
-        i.putExtra(CineBrowserActivity.EXTRA_URL,   url);
-        i.putExtra(CineBrowserActivity.EXTRA_TITLE, title);
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(i);
-
-        call.resolve();
     }
 
     private void unregisterReceiver() {
