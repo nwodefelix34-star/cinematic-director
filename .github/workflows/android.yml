@@ -61,11 +61,26 @@ jobs:
           cp CineBrowserActivity.java "$JAVA_DIR/CineBrowserActivity.java"
           cp CineBrowserPlugin.java   "$JAVA_DIR/CineBrowserPlugin.java"
           echo "✅ Java files copied"
+
+          # Patch AndroidManifest — singleTask + empty taskAffinity so the browser
+          # runs in its OWN task.  moveTaskToBack(true) then only hides the browser
+          # task; the main app task stays fully active (fix for "closes entire app").
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q "CineBrowserActivity" "$MANIFEST"; then
-            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" android:launchMode="singleTask" />\n    </application>|' "$MANIFEST"
+            sed -i 's|</application>|        <activity android:name=".CineBrowserActivity" android:exported="false" android:launchMode="singleTask" android:taskAffinity="" />\n    </application>|' "$MANIFEST"
           fi
           echo "✅ Manifest patched"
+
+          # Add androidx.webkit to app/build.gradle for addDocumentStartJavaScript support
+          # (true pre-page JS injection — bypasses ImageFX CSP completely)
+          APP_GRADLE=android/app/build.gradle
+          if ! grep -q "androidx.webkit" "$APP_GRADLE"; then
+            sed -i 's|dependencies {|dependencies {\n    implementation "androidx.webkit:webkit:1.8.0"|' "$APP_GRADLE"
+            echo "✅ androidx.webkit added to build.gradle"
+          else
+            echo "✅ androidx.webkit already present"
+          fi
+
           python3 patch_mainactivity.py
           echo "=== MainActivity ===" && cat "$JAVA_DIR/MainActivity.java"
 
