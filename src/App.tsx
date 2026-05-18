@@ -162,34 +162,69 @@ const scanFilesLibrary = async (): Promise<Array<{
 //
 // CineBrowser is our own Capacitor plugin (CineBrowserPlugin.java) that:
 //   ✅ Opens a full-screen WebView with dark toolbar matching the app
-//   ✅ Intercepts downloads before they hit the phone's file system
+//   ✅ Intercepts downloads (blob store override bypasses ImageFX CSP)
 //   ✅ Saves files to the app's private /files/cine_downloads/ folder
 //   ✅ Returns the file as a base64 dataUrl directly to JavaScript
 //   ✅ Auto-closes the browser and imports the file into the scene
+//   ✅ Supports minimize (⊟ button / back gesture) — WebView stays alive
+//   ✅ Re-opening while minimized brings existing session to front (singleTask)
 //
 // Falls back to @capacitor/browser (Chrome Custom Tab) if CineBrowser
 // hasn't loaded yet (first launch before plugin registers).
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Module-level state so listener registration persists across React re-renders
+// and the browser's "alive" status is tracked globally.
+let _cineCallbacks: {
+  onFileDownloaded: (dataUrl: string, mimeType: string) => void;
+  onClose: () => void;
+  onMinimize?: () => void;
+} | null = null;
+let _cineListenersSetup = false;
+
+// Exposed so JSX can show a "Browser open / minimized" indicator
+export let cineBrowserAlive = false;
+
 const openCapacitorBrowser = (
   url: string,
   title: string,
   onFileDownloaded: (dataUrl: string, mimeType: string) => void,
   onClose: () => void,
+  onMinimize?: () => void,
 ): void => {
   const CineBrowser = (window as any).Capacitor?.Plugins?.CineBrowser;
 
   if (CineBrowser?.open) {
-    // ── Our custom native plugin ──────────────────────────────────────
+    // Always update callbacks so the correct scene handler fires
+    _cineCallbacks = { onFileDownloaded, onClose, onMinimize };
+
+    // Register listeners once — they stay alive across minimize/restore cycles
+    if (!_cineListenersSetup) {
+      _cineListenersSetup = true;
+
+      CineBrowser.addListener('fileDownloaded', (result: any) => {
+        cineBrowserAlive = false;
+        _cineCallbacks?.onFileDownloaded(result.dataUrl, result.mimeType);
+      }).catch(() => {});
+
+      CineBrowser.addListener('browserClosed', () => {
+        cineBrowserAlive = false;
+        _cineCallbacks?.onClose();
+      }).catch(() => {});
+
+      CineBrowser.addListener('browserMinimized', () => {
+        // WebView is alive but hidden — keep cineBrowserAlive = true
+        cineBrowserAlive = true;
+        _cineCallbacks?.onMinimize?.();
+      }).catch(() => {});
+    }
+
+    // open() uses FLAG_ACTIVITY_REORDER_TO_FRONT on the Java side:
+    // • If Activity doesn't exist yet  → creates it, loads url
+    // • If Activity is minimized       → brings it to front, fires onNewIntent to
+    //                                    navigate to url (only if url changed)
     CineBrowser.open({ url, title });
-
-    CineBrowser.addListener('fileDownloaded', (result: any) => {
-      onFileDownloaded(result.dataUrl, result.mimeType);
-    }).catch(() => {});
-
-    CineBrowser.addListener('browserClosed', () => {
-      onClose();
-    }).catch(() => {});
-
+    cineBrowserAlive = true;
     return;
   }
 
@@ -281,6 +316,25 @@ const CHANNELS: ChannelDefinition[] = [
 ];
 
 const App: React.FC = () => {
+
+  // ── RESPONSIVE VIEWPORT FIX ──────────────────────────────────────────────
+  // `100vh` on Android doesn't account for the status bar, nav bar, or soft
+  // keyboard.  Set --app-h to the real available height so all full-screen
+  // containers can use `height: var(--app-h)` instead of `100vh`.
+  useEffect(() => {
+    const setAppHeight = () => {
+      document.documentElement.style.setProperty('--app-h', `${window.innerHeight}px`);
+      document.documentElement.style.setProperty('--app-w', `${window.innerWidth}px`);
+    };
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    // Also fire on orientation change (covers soft-keyboard open/close on Android)
+    window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100));
+    return () => {
+      window.removeEventListener('resize', setAppHeight);
+      window.removeEventListener('orientationchange', setAppHeight);
+    };
+  }, []);
 
   const [appMode, setAppMode] = useState<'channels' | 'ideas' | 'editor'>('channels');
   const [selectedChannelId, setSelectedChannelId] = useState<string>('mindforged');
@@ -833,6 +887,7 @@ const App: React.FC = () => {
             }, true);
           },
           () => { setIsBridgeOpen(false); setShowMobileImport(true); },
+          () => { /* browser minimized — keep isBridgeOpen=true so indicator stays */ },
         );
 
       } else {
@@ -912,6 +967,7 @@ const App: React.FC = () => {
           }
         },
         () => { setIsBridgeOpen(false); setShowMobileImport(true); },
+        () => { /* browser minimized — keep isBridgeOpen=true */ },
       );
 
     } else {
@@ -1080,7 +1136,7 @@ const App: React.FC = () => {
   // ══════════════════════════════
   if (appMode === 'channels') {
     return (
-      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col items-center justify-center gap-6 p-6">
+      <div className="bg-[#050507] text-white flex flex-col items-center justify-center gap-6 p-6" style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)' }}>
         <div className="text-center mb-2">
           <div className="text-[10px] font-black uppercase tracking-[4px] text-slate-600 mb-2">Cinematic Veo Director</div>
           <h1 className="text-xl font-black uppercase tracking-widest">Select Channel</h1>
@@ -1129,7 +1185,7 @@ const App: React.FC = () => {
     const channelIdeas = savedIdeas[selectedChannelId] || [];
     const ch = CHANNELS.find(c => c.id === selectedChannelId);
     return (
-      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col p-8 gap-6 overflow-y-auto">
+      <div className="bg-[#050507] text-white flex flex-col p-8 gap-6 overflow-y-auto" style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)' }}>
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${selectedChannelId === 'knowit3d' ? 'bg-violet-500/20 text-violet-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
             <i className={`fas ${ch?.icon || 'fa-lightbulb'}`} />
@@ -1185,7 +1241,7 @@ const App: React.FC = () => {
   // MAIN EDITOR
   // ══════════════════════════════
   return (
-    <div className={`flex flex-col h-screen w-screen overflow-hidden bg-[#050507] text-[#f1f5f9] ${isResizingTimeline ? 'cursor-row-resize' : ''}`}>
+    <div className={`flex flex-col overflow-hidden bg-[#050507] text-[#f1f5f9] ${isResizingTimeline ? 'cursor-row-resize' : ''}`} style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)', maxHeight: 'var(--app-h, 100dvh)' }}>
 
       {/* HEADER */}
       <header className="h-14 border-b border-white/5 flex items-center justify-between px-5 bg-[#0a0a0f] shrink-0 z-50">
