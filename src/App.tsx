@@ -173,17 +173,14 @@ const scanFilesLibrary = async (): Promise<Array<{
 // hasn't loaded yet (first launch before plugin registers).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Module-level state so listener registration persists across React re-renders
-// and the browser's "alive" status is tracked globally.
+// Module-level state so listener registration persists across React re-renders.
 let _cineCallbacks: {
   onFileDownloaded: (dataUrl: string, mimeType: string) => void;
   onClose: () => void;
   onMinimize?: () => void;
 } | null = null;
 let _cineListenersSetup = false;
-
-// Exposed so JSX can show a "Browser open / minimized" indicator
-export let cineBrowserAlive = false;
+let cineBrowserAlive = false; // not exported — UI uses isBrowserMinimized React state
 
 const openCapacitorBrowser = (
   url: string,
@@ -1137,7 +1134,7 @@ const App: React.FC = () => {
   // ══════════════════════════════
   if (appMode === 'channels') {
     return (
-      <div className="bg-[#050507] text-white flex flex-col items-center justify-center gap-6 p-6" style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)' }}>
+      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col items-center justify-center gap-6 p-6" style={{ height: 'var(--app-h)', width: 'var(--app-w)' }}>
         <div className="text-center mb-2">
           <div className="text-[10px] font-black uppercase tracking-[4px] text-slate-600 mb-2">Cinematic Veo Director</div>
           <h1 className="text-xl font-black uppercase tracking-widest">Select Channel</h1>
@@ -1186,7 +1183,7 @@ const App: React.FC = () => {
     const channelIdeas = savedIdeas[selectedChannelId] || [];
     const ch = CHANNELS.find(c => c.id === selectedChannelId);
     return (
-      <div className="bg-[#050507] text-white flex flex-col p-8 gap-6 overflow-y-auto" style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)' }}>
+      <div className="h-screen w-screen bg-[#050507] text-white flex flex-col p-8 gap-6 overflow-y-auto" style={{ height: 'var(--app-h)', width: 'var(--app-w)' }}>
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${selectedChannelId === 'knowit3d' ? 'bg-violet-500/20 text-violet-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
             <i className={`fas ${ch?.icon || 'fa-lightbulb'}`} />
@@ -1242,7 +1239,7 @@ const App: React.FC = () => {
   // MAIN EDITOR
   // ══════════════════════════════
   return (
-    <div className={`flex flex-col overflow-hidden bg-[#050507] text-[#f1f5f9] ${isResizingTimeline ? 'cursor-row-resize' : ''}`} style={{ height: 'var(--app-h, 100dvh)', width: 'var(--app-w, 100vw)', maxHeight: 'var(--app-h, 100dvh)' }}>
+    <div className={`flex flex-col h-screen w-screen overflow-hidden bg-[#050507] text-[#f1f5f9] ${isResizingTimeline ? 'cursor-row-resize' : ''}`} style={{ height: 'var(--app-h)', width: 'var(--app-w)' }}>
 
       {/* HEADER */}
       <header className="h-14 border-b border-white/5 flex items-center justify-between px-3 bg-[#0a0a0f] shrink-0 z-50 overflow-hidden">
@@ -2023,8 +2020,8 @@ const App: React.FC = () => {
               setIsBrowserMinimized(false);
             }
           }}
-          className="fixed bottom-[calc(var(--timeline-h,180px)+16px)] left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-4 py-2 bg-[#0a0a0f] border border-cyan-400/40 rounded-full shadow-2xl shadow-cyan-400/20 text-cyan-400 text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400/10 active:scale-95 transition-all"
-          style={{ boxShadow: '0 0 20px rgba(34,211,238,0.2)' }}
+          className="fixed left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 px-4 py-2 bg-[#0a0a0f] border border-cyan-400/40 rounded-full shadow-2xl text-cyan-400 text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400/10 active:scale-95 transition-all"
+          style={{ bottom: `calc(${timelineHeight}px + 16px)`, boxShadow: '0 0 20px rgba(34,211,238,0.2)' }}
         >
           <i className="fas fa-globe text-xs"></i>
           <span>{bridgeMode === 'hunyuan' ? 'Hunyuan' : 'Flow'} — Resume Browser</span>
