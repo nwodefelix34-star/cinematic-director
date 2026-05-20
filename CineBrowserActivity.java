@@ -40,22 +40,71 @@ public class CineBrowserActivity extends Activity {
     // BLOB STORE INJECTION (injected via addDocumentStartJavaScript so it runs
     // BEFORE any page JS — bypasses ImageFX's connect-src CSP entirely).
     // ─────────────────────────────────────────────────────────────────────────
+    // Injected before any page JS runs (via addDocumentStartJavaScript when available,
+    // async evaluateJavascript otherwise).  Three jobs:
+    //  1. Blob store — override URL.createObjectURL (and webkitURL alias) so every blob
+    //     the page creates is cached and readable without a network fetch.
+    //  2. Canvas capture — window.__cineCapture() finds the largest visible <img> and
+    //     exports it as a JPEG via canvas.  This is the reliable fallback when the blob
+    //     was created in a Service Worker context (where our main-thread override can't
+    //     reach) and fetch() is blocked by CSP.
+    //  3. webkitURL alias — some legacy code paths call webkitURL.createObjectURL;
+    //     we override that too.
     private static final String BLOB_STORE_JS =
         "(function() {" +
-        "  if (window.__CineBlobStoreInstalled) return;" +
-        "  window.__CineBlobStoreInstalled = true;" +
+        "  if (window.__CineInstalled) return;" +
+        "  window.__CineInstalled = true;" +
+
+        // ── 1. Blob store ──────────────────────────────────────────────────
         "  window.__cineBlobStore = {};" +
-        "  var _orig = URL.createObjectURL.bind(URL);" +
-        "  URL.createObjectURL = function(blob) {" +
-        "    var url = _orig(blob);" +
-        "    window.__cineBlobStore[url] = blob;" +
-        "    return url;" +
-        "  };" +
-        "  var _rev = URL.revokeObjectURL.bind(URL);" +
+        "  function _storeBlob(orig) {" +
+        "    return function(blob) {" +
+        "      var url = orig.call(this, blob);" +
+        "      window.__cineBlobStore[url] = blob;" +
+        "      return url;" +
+        "    };" +
+        "  }" +
+        "  URL.createObjectURL = _storeBlob(URL.createObjectURL.bind(URL));" +
+        "  var _revOrig = URL.revokeObjectURL.bind(URL);" +
         "  URL.revokeObjectURL = function(url) {" +
         "    delete window.__cineBlobStore[url];" +
-        "    _rev(url);" +
+        "    _revOrig(url);" +
         "  };" +
+        // Also cover webkitURL (used in some older/vendor code paths)
+        "  try {" +
+        "    if (typeof webkitURL !== 'undefined' && webkitURL !== URL) {" +
+        "      webkitURL.createObjectURL = _storeBlob(webkitURL.createObjectURL.bind(webkitURL));" +
+        "    }" +
+        "  } catch(e) {}" +
+
+        // ── 2. Canvas capture helper ───────────────────────────────────────
+        // Called by the DownloadListener JS when the blob store is empty.
+        // Finds the largest visible <img> in the DOM (preferring blob/data srcs)
+        // and exports it via canvas.  Works even when the blob was created in a
+        // Service Worker (SW-created blob URLs cannot be fetched, but <img> can
+        // display them — and canvas can read same-origin blob images).
+        "  window.__cineCapture = function() {" +
+        "    try {" +
+        "      var imgs = Array.from(document.querySelectorAll('img'));" +
+        "      var best = null, bestScore = 0;" +
+        "      for (var i = 0; i < imgs.length; i++) {" +
+        "        var img = imgs[i];" +
+        "        if (!img.complete || !img.naturalWidth || img.naturalWidth < 100) continue;" +
+        "        var score = img.naturalWidth * img.naturalHeight;" +
+        // Heavily prefer blob: and data: sources (they're the AI-generated content)
+        "        if (img.src && (img.src.startsWith('blob:') || img.src.startsWith('data:'))) score *= 200;" +
+        "        if (score > bestScore) { bestScore = score; best = img; }" +
+        "      }" +
+        "      if (!best) { CineBridge.onBlobReady(null, 'error:no image found in DOM'); return; }" +
+        "      var canvas = document.createElement('canvas');" +
+        "      canvas.width  = best.naturalWidth;" +
+        "      canvas.height = best.naturalHeight;" +
+        "      canvas.getContext('2d').drawImage(best, 0, 0);" +
+        "      var dataUrl = canvas.toDataURL('image/jpeg', 0.95);" +
+        "      CineBridge.onBlobReady(dataUrl.split(',')[1], 'image/jpeg');" +
+        "    } catch(e) { CineBridge.onBlobReady(null, 'error:canvas: ' + e.toString()); }" +
+        "  };" +
+
         "})();";
 
     private WebView     webView;
@@ -231,8 +280,10 @@ public class CineBrowserActivity extends Activity {
             if (dlUrl.startsWith("blob:")) {
                 String esc  = dlUrl.replace("\\", "\\\\").replace("'", "\\'");
                 String escM = safeMime.replace("'", "\\'");
-                // Primary: read from our blob store (no network, no CSP issue)
-                // Fallback: fetch() in case store was missed
+                // Path 1: blob store hit (blob created on main thread, our override caught it)
+                // Path 2: canvas capture (blob created in Service Worker — can't fetch() it,
+                //         but the <img> IS in the DOM and canvas reads same-origin blob images)
+                // fetch() deliberately removed — always fails for SW blobs + blocked by CSP.
                 String js =
                     "(function() {" +
                     "  try {" +
@@ -240,20 +291,15 @@ public class CineBrowserActivity extends Activity {
                     "    if (b) {" +
                     "      var r = new FileReader();" +
                     "      r.onloadend = function() { CineBridge.onBlobReady(r.result.split(',')[1], b.type || '" + escM + "'); };" +
-                    "      r.onerror   = function() { CineBridge.onBlobReady(null, 'error:FileReader failed'); };" +
+                    "      r.onerror   = function() { if (window.__cineCapture) window.__cineCapture(); else CineBridge.onBlobReady(null, 'error:FileReader failed'); };" +
                     "      r.readAsDataURL(b);" +
                     "    } else {" +
-                    "      fetch('" + esc + "')" +
-                    "        .then(function(res) { return res.blob(); })" +
-                    "        .then(function(b2) {" +
-                    "          var r2 = new FileReader();" +
-                    "          r2.onloadend = function() { CineBridge.onBlobReady(r2.result.split(',')[1], b2.type || '" + escM + "'); };" +
-                    "          r2.onerror   = function() { CineBridge.onBlobReady(null, 'error:FileReader(fetch) failed'); };" +
-                    "          r2.readAsDataURL(b2);" +
-                    "        })" +
-                    "        .catch(function(e) { CineBridge.onBlobReady(null, 'error:fetch: ' + e.message); });" +
+                    "      if (window.__cineCapture) window.__cineCapture();" +
+                    "      else CineBridge.onBlobReady(null, 'error:store empty, no canvas helper');" +
                     "    }" +
                     "  } catch(e) { CineBridge.onBlobReady(null, 'error:' + e.toString()); }" +
+                    "})();";
+                webView.evaluateJavascript(js, null);
                     "})();";
                 webView.evaluateJavascript(js, null);
 
