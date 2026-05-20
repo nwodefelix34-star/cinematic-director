@@ -300,8 +300,6 @@ public class CineBrowserActivity extends Activity {
                     "  } catch(e) { CineBridge.onBlobReady(null, 'error:' + e.toString()); }" +
                     "})();";
                 webView.evaluateJavascript(js, null);
-                    "})();";
-                webView.evaluateJavascript(js, null);
 
             } else if (dlUrl.startsWith("data:")) {
                 new Thread(() -> {
